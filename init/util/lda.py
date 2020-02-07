@@ -1,0 +1,193 @@
+"""
+Linear Discriminant Analysis Algorithm
+
+It computes both the transformation matrix and the linear discriminants
+"""
+
+import logging
+
+import numpy as np
+
+
+def transform(X, y):
+    """
+    Computes the transformation matrix
+    :param X: np.array(N,m)
+        input data. On the rows are the samples and on the columns are the
+        dimensions. Typically you want to have NUM_ROWS >> NUM_COLS otherwise
+        you get a singular-matrix error
+    :param y: np.array(N,)
+        labels of the input data in the range [0,num_classes-1].
+    :return:
+        L=np.array(N,m) = the LDA transformation matrix L
+        C=np.array(N,) = a bias vector with zeros (in LDA it must be so!)
+    """
+    # Check for sizes
+    assert len(X.shape) == 2
+    assert len(y.shape) == 1
+
+    # Detect number of unique classes
+    NUM_CLASSES = len(np.unique(y))
+
+    ###########################################################################
+    # Step 1: Computing the mean vectors
+    mean_vectors = []
+    for cl in range(NUM_CLASSES):
+        mean_vectors.append(np.mean(X[y == cl], axis=0))
+        # print('Mean Vector class %s: %s' % (cl, mean_vectors[cl]))
+
+    overall_mean = np.mean(X, axis=0)
+
+    nmu = len(X) / NUM_CLASSES
+
+    ###########################################################################
+    # Step 2: Computing the Scatter Matrices
+    S_W = np.zeros((X.shape[1], X.shape[1]))
+    for cl in range(NUM_CLASSES):
+        S_W += (np.transpose(X[y == cl] - mean_vectors[cl]).dot(
+            X[y == cl] - mean_vectors[cl])) / len(X[y == cl])
+    S_W *= nmu
+    # print('within-class Scatter Matrix:\n', S_W)
+
+    S_B = np.zeros((X.shape[1], X.shape[1]))
+    for cl in range(NUM_CLASSES):
+        S_B += (np.transpose(
+            np.expand_dims(mean_vectors[cl] - overall_mean, 0)).dot(
+            np.expand_dims(mean_vectors[cl] - overall_mean, 0))) / len(
+            X[y == cl])
+    S_B *= nmu
+    # print('between-class Scatter Matrix:\n', S_B)
+
+    ###########################################################################
+    # Step 3: Solving the generalized eigenvalue problem
+    # beware of pinv() instead of inv()!!
+    try:
+        eig_vals, eig_vecs = np.linalg.eig(np.linalg.inv(S_W).dot(S_B))
+    except np.linalg.LinAlgError:
+        # Not invertible. Skip this one.
+        logging.error('np.linalg.LinAlgError raised, trying with pinv() instead')
+        eig_vals, eig_vecs = np.linalg.eig(np.linalg.pinv(S_W).dot(S_B))
+        pass
+
+    eig_vals = np.real(eig_vals)
+    eig_vecs = np.real(eig_vecs)
+
+    # continue with what you were doing
+
+    # eig_vals, eig_vecs = np.linalg.eig(np.linalg.inv(S_W).dot(S_B))
+
+    ###########################################################################
+    # Step 4: Selecting linear discriminants for the new feature subspace
+    # Make a  list of(eigenvalue, eigenvector)tuples
+    # eig_pairs = [(np.abs(eig_vals[i]), eig_vecs[:, i]) for i in range(len(eig_vals))]
+
+    # Sort the (eigenvalue, eigenvector) tuples from high to low
+    # eig_pairs = sorted(eig_pairs, key=lambda k: k[0], reverse=True)
+
+    # 4.2.Choosing k eigenvectors with the largest eigenvalues
+    # L = np.hstack((eig_pairs[0][1].reshape(X.shape[1], 1), eig_pairs[1][1].reshape(X.shape[1], 1)))
+    # print('Matrix L:\n', L.real)
+    L = eig_vecs[:, np.argsort(eig_vals)[::-1]]
+
+    # Biases are needed to re-center the data
+    B = np.mean(X, 0)
+
+    return L, B
+    """
+    assert len(X.shape) == 2
+    assert len(y.shape) == 1
+
+    clf = LinearDiscriminantAnalysis(solver='eigen')
+    clf.fit(X, y)
+
+    # The negative is returned to match mathematical definition
+    return -clf.scalings_, np.mean(X, axis=0)
+    """
+
+
+def discriminants(X, y):
+
+    # Check for sizes
+    assert len(X.shape) == 2
+    assert len(y.shape) == 1
+
+    # TODO this is the scikitlearn implementation. Find out why is different.
+    # shrinkage = None
+    #
+    # _, y_t = np.unique(y, return_inverse=True)  # non-negative ints
+    # priors_ = np.bincount(y_t) / float(len(y))
+    #
+    # # Detect number of unique classes
+    # NUM_CLASSES = len(np.unique(y))
+    # _max_components =  NUM_CLASSES - 1
+    #
+    # means_ = _class_means(X, y)
+    # covariance_ = _class_cov(X, y, priors_, shrinkage)
+    #
+    # Sw = covariance_  # within scatter
+    # St = _cov(X, shrinkage)  # total scatter
+    # Sb = St - Sw  # between scatter
+    #
+    # #evals, evecs = linalg.eigh(Sb, Sw)
+    #
+    # evecs, _, evals  = transform(X, y)
+    #
+    # explained_variance_ratio_ = np.sort(evals / np.sum(evals)
+    #                                          )[::-1][:_max_components]
+    # evecs = evecs[:, np.argsort(evals)[::-1]]  # sort eigenvectors
+    # evecs /= np.linalg.norm(evecs, axis=0)
+    #
+    # scalings_ = evecs
+    # coef_ = np.dot(means_, evecs).dot(evecs.T)
+    # intercept_ = (-0.5 * np.diag(np.dot(means_, coef_.T)) +
+    #                    np.log(priors_))
+    #
+    # return coef_ , intercept_
+
+    # Compute linear discriminants
+    logging.debug('Compute linear discriminants')
+    NUM_CLASSES = len(np.unique(y))
+    pooled_conv = np.zeros((X.shape[1], X.shape[1]))
+
+    # Step 1: Computing the mean vectors
+    logging.debug('Step 1: Computing the mean vectors')
+    for cl in range(NUM_CLASSES):
+        pooled_conv += (float(len(X[y == cl]) - 1) / (
+        len(X) - NUM_CLASSES)) * np.cov(np.transpose(X[y == cl]))
+
+    # print('Pooled_cov: \n{}'.format(pooled_conv))
+
+    # Step 2: Computing prior probabilities
+    logging.debug('Step 2: Computing prior probabilities')
+    prior_prob = []
+    for cl in range(NUM_CLASSES):
+        prior_prob.append(float(len(X[y == cl])) / len(X))
+
+    # Step 3: Main routine
+    logging.debug('Step 3: Main routine')
+    W = np.zeros((NUM_CLASSES, X.shape[1]))
+    C = np.zeros(NUM_CLASSES)
+    for cl in range(NUM_CLASSES):
+        logging.debug('Class {}'.format(cl))
+        mean_vector = np.mean(X[y == cl], axis=0)
+        W[cl] = np.linalg.lstsq(pooled_conv, mean_vector, rcond=None)[0]
+        C[cl] = -0.5 * np.matmul(W[cl], np.expand_dims(mean_vector, 0).T) + np.log(prior_prob[cl])
+
+    W = W.T
+    C = C.T
+
+    logging.debug('Finish')
+    # We return the transpose because PYTORCH WANT THE MATRIX to be flipped!! BE CAREFUL WHEN THINKING ABOUT THIS!
+    return W.T, C.T
+
+    # """
+    # L = np.matmul(X,W)+ C
+    # sum = np.zeros(len(X))
+    # P = np.zeros((len(X),NUM_CLASSES))
+    # for i in range(len(X)):
+    #     for cl in range(NUM_CLASSES):
+    #         sum[i] += np.exp(L[i,cl])
+    #
+    #     for cl in range(NUM_CLASSES):
+    #         P[i,cl] = np.exp(L[i,cl]) / sum[i]
+    # """
