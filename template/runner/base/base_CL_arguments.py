@@ -25,6 +25,7 @@ class BaseCLArguments:
         self._criterion_options()
         self._system_options()
         self._inference_parameters()
+        self._wandb_options()
 
     def parse_arguments(self, args=None):
         """ Parse the command line arguments provided
@@ -311,3 +312,12 @@ class BaseCLArguments:
                                       action='store_true',
                                       help='flag for calling the fast (and lightweight) methods of calling execute')
 
+    def _wandb_options(self):
+        """ WandB options"""
+
+        parser_wandb = self.parser.add_argument_group('WANDB', 'WandB Options')
+        parser_wandb.add_argument('--wandb-project',
+                                  type=str,
+                                  default=None,
+                                  required=False,
+                                  help='name of your wandb project')

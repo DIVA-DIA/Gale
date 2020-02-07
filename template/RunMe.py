@@ -454,6 +454,11 @@ class RunMe:
             Specify the logging level
         args_dict : dict
             Contains the entire argument dictionary specified via command line.
+        debug : bool
+            Flag for debugging level
+        wandb_project : str
+            Token for using the WandDB tool
+
 
         Returns
         -------
