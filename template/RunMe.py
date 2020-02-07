@@ -26,21 +26,19 @@ import traceback
 import colorlog
 import numpy as np
 # Torch related stuff
-import torch.backends.cudnn as cudnn
-import torch.nn.parallel
-import torch.optim
-import torch.utils.data
+import torch
+
 # SigOpt
 from sigopt import Connection
 
-# DeepDIVA
+# Gale
 from template.runner.base import AbstractRunner, BaseCLArguments
 from util.TB_writer import TBWriter
 from util.misc import get_all_files_in_folders_and_subfolders
 from util.misc import to_capital_camel_case
-########################################################################################################################
 from visualization.mean_std_plot import plot_mean_std
 
+########################################################################################################################
 
 class RunMe:
     """
@@ -135,9 +133,9 @@ class RunMe:
 
                 # Override/inject CL arguments received from SigOpt
                 for key in params:
-                    if isinstance(kwargs[key], bool):
+                    if key in kwargs and isinstance(kwargs[key], bool):
                         params[key] = params[key].lower() in ['true']
-                    kwargs[key] = params[key]
+                    kwargs[key.replace("-", "_")] = params[key]
 
                 # Run
                 _, _, score = cls._execute(**kwargs)
@@ -199,7 +197,6 @@ class RunMe:
 
         # Set up execution environment. Specify CUDA_VISIBLE_DEVICES and seeds
         cls._set_up_env(**kwargs)
-        # kwargs["device"] = torch.device(kwargs["device"] if torch.cuda.is_available() else "cpu")
         kwargs["device"] = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
         # Find all subclasses of AbstractRunner and BaseRunner and select the chosen one among them based on -rc
@@ -439,7 +436,7 @@ class RunMe:
                 raise SystemExit
 
     @classmethod
-    def _set_up_logging(cls, parser, experiment_name, output_folder, quiet, args_dict, debug, **kwargs):
+    def _set_up_logging(cls, parser, experiment_name, output_folder, quiet, args_dict, debug, wandb_project, **kwargs):
         """
         Set up a logger for the experiment
 
@@ -463,6 +460,10 @@ class RunMe:
         log_folder : String
             The final logging folder tree
         """
+        if wandb_project is not None:
+            import wandb
+            wandb.init(project=wandb_project, name=experiment_name, sync_tensorboard=True)
+
         LOG_FILE = 'logs.txt'
 
         # Recover dataset name
@@ -485,7 +486,7 @@ class RunMe:
         # Fetch all non-default parameters
         non_default_parameters = []
         for group in parser._action_groups[2:]:
-            if group.title not in ['GENERAL', 'DATA']:
+            if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
                             kwargs[action.dest] != action.default) \
@@ -569,7 +570,7 @@ class RunMe:
 
         # Get DeepDIVA root
         cwd = os.getcwd()
-        dd_root = os.path.join(cwd.split('DeepDIVA')[0], 'DeepDIVA')
+        dd_root = os.path.join(cwd.split('Gale')[0], 'Gale')
 
         files = get_all_files_in_folders_and_subfolders(dd_root)
 
@@ -579,14 +580,14 @@ class RunMe:
         tmp_dir = tempfile.mkdtemp()
 
         for item in code_files:
-            dest = os.path.join(tmp_dir, 'DeepDIVA', item.split('DeepDIVA')[1][1:])
+            dest = os.path.join(tmp_dir, 'Gale', item.split('Gale')[1][1:])
             if not os.path.exists(os.path.dirname(dest)):
                 os.makedirs(os.path.dirname(dest))
             shutil.copy(item, dest)
 
         # TODO: make it save a zipfile instead of a tarfile.
-        with tarfile.open(os.path.join(output_folder, 'DeepV7.tar.gz'), 'w:gz') as tar:
-            tar.add(tmp_dir, arcname='DeepDIVA')
+        with tarfile.open(os.path.join(output_folder, 'Gale.tar.gz'), 'w:gz') as tar:
+            tar.add(tmp_dir, arcname='Gale')
 
         # Clean up all temporary files
         shutil.rmtree(tmp_dir)
@@ -611,10 +612,7 @@ class RunMe:
         -------
             None
         """
-
         # Set visible GPUs
-        # TODO this does not work since it has to be called before importing
-        # torch
         if gpu_id is not None:
             os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(id) for id in gpu_id])
 
