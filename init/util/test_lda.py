@@ -1,8 +1,7 @@
 import numpy as np
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-from util.lda import discriminants
-from util.lda import transform
+from init.util.lda import transform, discriminants
 
 
 def test_lda_transform():
