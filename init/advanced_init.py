@@ -14,7 +14,7 @@ import torch
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-import util.lda as lda
+from init.util import lda
 
 
 def _normalize_weights(w, b):

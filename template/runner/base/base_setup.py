@@ -134,13 +134,14 @@ class BaseSetup:
         # Transfer model to GPU
         if not no_cuda:
             logging.info('Transfer model to GPU')
-            model = torch.nn.DataParallel(model).cuda()
+            # model = torch.nn.DataParallel(model).cuda()
+            model = model.cuda()
             cudnn.benchmark = True
 
         # Magic from WanDB
-        # if wandb_project is not None:
-        #     import wandb
-        #     wandb.watch(model)
+        if wandb_project is not None:
+            import wandb
+            wandb.watch(model)
 
         return model
 

@@ -1,4 +1,3 @@
-# DeepDIVA
 from init import advanced_init
 from template.runner.base import BaseCLArguments
 
@@ -25,7 +24,7 @@ class CLArguments(BaseCLArguments):
         """
         init_options = [name for name in advanced_init.__dict__ if callable(advanced_init.__dict__[name])]
 
-        parser_init = self.arser.add_argument_group('INIT', 'Init Options')
+        parser_init = self.parser.add_argument_group('INIT', 'Init Options')
 
         parser_init.add_argument('--init',
                                  action='store_true',
