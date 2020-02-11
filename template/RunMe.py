@@ -439,7 +439,7 @@ class RunMe:
                 raise SystemExit
 
     @classmethod
-    def _set_up_logging(cls, parser, experiment_name, output_folder, quiet, args_dict, debug, **kwargs):
+    def _set_up_logging(cls, parser, experiment_name, output_folder, quiet, args_dict, debug, wandb_project, **kwargs):
         """
         Set up a logger for the experiment
 
@@ -463,6 +463,11 @@ class RunMe:
         log_folder : String
             The final logging folder tree
         """
+
+        if wandb_project is not None:
+            import wandb
+            wandb.init(project=wandb_project, name=experiment_name, config=args_dict, sync_tensorboard=True)
+
         LOG_FILE = 'logs.txt'
 
         # Recover dataset name
