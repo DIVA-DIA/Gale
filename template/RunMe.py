@@ -490,7 +490,7 @@ class RunMe:
         # Fetch all non-default parameters
         non_default_parameters = []
         for group in parser._action_groups[2:]:
-            if group.title not in ['GENERAL', 'DATA']:
+            if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
                             kwargs[action.dest] != action.default) \
