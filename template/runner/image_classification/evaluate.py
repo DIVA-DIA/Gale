@@ -47,7 +47,7 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
         MetricLogger().update(key='confusion_matrix', p=np.argmax(output.data.cpu().numpy(), axis=1), t=target.cpu().numpy())
 
     @classmethod
-    def end_of_the_epoch(cls, data_loader, epoch, logging_label, multi_run_label, **kwargs):
+    def end_of_the_epoch(cls, data_loader, epoch, logging_label, multi_run_label, current_log_folder, **kwargs):
         """See parent method for documentation
 
         Extra-Parameters
@@ -73,3 +73,13 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
                             text_string='\n' + cr,
                             global_step=epoch)
 
+        # only during testing
+        if current_log_folder:
+            multi_tag = ''
+            if len(multi_run_label) > 0:
+                multi_tag = ' run{}'.format(multi_run_label)
+            # save the clasification output as a csv
+            MetricLogger()['classification_results{}'.format(multi_run_label)].save_csv(output_folder=current_log_folder, multi_run_label=multi_run_label)
+            report = MetricLogger()['classification_results{}'.format(multi_run_label)].get_report()
+            TBWriter().add_text(tag='Classification per test file {}\n'.format(multi_tag),
+                            text_string='\n' + report)
