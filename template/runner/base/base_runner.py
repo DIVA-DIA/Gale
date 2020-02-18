@@ -132,7 +132,7 @@ class BaseRunner(AbstractRunner):
                                for name in batch_lrscheduler_name]
         # Append by default a warm-up learning rate scheduler setup on 1 epoch period
         batch_lr_schedulers.append(self.setup.warmup_lr_scheduler(optimizer=optimizer,
-                                                                  warmup_factor=1. / 1000,
+                                                                  warmup_factor=1. / 1000000,
                                                                   warmup_iters=len(train_loader) - 1))
         epoch_lr_schedulers = [self.setup.get_lrscheduler(optimizer=optimizer, lrscheduler_name=name, **kwargs)
                                for name in epoch_lrscheduler_name]
