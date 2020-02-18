@@ -123,27 +123,28 @@ class BaseRoutine:
            The input and target data for the mini-batch
         no_cuda : boolean
             Specifies whether the GPU should be used or not. A value of 'True' means the CPU will be used.
+
         Returns
         -------
         input : torch.autograd.Variable
         target : torch.autograd.Variable
            The input and target data for the mini-batch loaded on the GPU
         """
-        def move_to_cuda(elem):
+        def move_to(elem):
             if elem is not None:
                 if isinstance(elem, dict):
                     for k, v in elem.items():
-                        elem[k] = move_to_cuda(v)
+                        elem[k] = move_to(v)
                 elif isinstance(elem, (list, tuple)):
-                    elem = [move_to_cuda(e) for e in elem]
+                    elem = [move_to(e) for e in elem]
                 else:
-                    elem = elem.cuda(non_blocking=True)
+                    if no_cuda:
+                        elem = elem.cpu()
+                    else:
+                        elem = elem.cuda(non_blocking=True)
             return elem
 
-        if not no_cuda:
-            input = move_to_cuda(input)
-            target = move_to_cuda(target)
-        return input, target
+        return move_to(input), move_to(target)
 
     @classmethod
     def start_of_the_epoch(cls, **kwargs):
