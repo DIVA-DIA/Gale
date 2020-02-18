@@ -1,4 +1,5 @@
 # Gale
+from init.initializer import init_model
 from template.runner.base import BaseRunner
 
 
@@ -18,6 +19,23 @@ class ImageClassification(BaseRunner):
         """
         super().__init__()
         self.setup =  ImageClassificationSetup()
+
+    ####################################################################################################################
+    def prepare(self, model_name, resume, batch_lrscheduler_name, epoch_lrscheduler_name, init=False, **kwargs) -> dict:
+        """See parent method for documentation
+
+        Extra-Parameters
+        ----------
+        init : bool
+            Flag for use advanced init methods
+        """
+        d = super().prepare(model_name, resume, batch_lrscheduler_name, epoch_lrscheduler_name, **kwargs)
+
+        # Init the model
+        if init:
+            init_model(model=d['model'], data_loader=d['train_loader'], **kwargs)
+
+        return d
 
     ####################################################################################################################
     """
