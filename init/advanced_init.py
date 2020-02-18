@@ -13,6 +13,7 @@ import torch
 # Init tools
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from torch import nn
 
 from init.util import lda
 
@@ -101,20 +102,38 @@ def _reshape_flattened_conv_filters(filters, kernel_filter_size):
     return filters.T.reshape(filters.shape[1], -1, kernel_filter_size, kernel_filter_size)
 
 
-def _basic_procedure(w, b, module, module_type):
+def _basic_procedure(w, b, module):
+    """
+    TODO 
+    
+    Parameters
+    ----------
+    w
+    b
+    module
+
+    Returns
+    -------
+
+    """
     # Check size of W
     w = _fit_weights_size(w, module)
 
     # Set B to be -W*mean(X) such that it centers the data
     b = -np.matmul(w.T, b)
-    assert (b.shape == module.bias.data.numpy().shape)
+    assert b.shape == module.bias.shape
 
     # Reshape
-    if 'conv' in module_type:
+
+    # CONV LAYER
+    if type(module) is nn.Conv2d:
         w = _reshape_flattened_conv_filters(w, module.kernel_size[0])
-    else:
+
+    # LINEAR LAYER
+    if type(module) is nn.Linear:
         w = w.T  # Linear Layers have neurons x input_dimensions
-    assert (w.shape == module.weight.data.numpy().shape)
+
+    assert (w.shape == module.weight.shape)
 
     # Set W by adding it to the current random values
     # sn_ratio = 1
@@ -127,14 +146,16 @@ def _basic_procedure(w, b, module, module_type):
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def pure_lda(layer_index, init_input, init_labels, model, module, module_type, **kwargs):
+def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
+    network_depth = len(list(list(model.children())[0].children()))
+
     ###################################################################################################################
     # All layers but the last one
-    if layer_index != len(list(model.children())) - 1:
+    if layer_index < network_depth:
         logging.info('LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels)
 
-        W, B = _basic_procedure(W, B, module, module_type)
+        W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
     # Last layer
@@ -169,7 +190,7 @@ def mirror_lda(layer_index, init_input, init_labels, model, module, module_type,
         # Mirror W. You don't mirror B because it has to be size of mean(X)
         W = np.hstack((W, -W))
 
-        W, B = _basic_procedure(W, B, module, module_type)
+        W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
     # Last layer
@@ -225,7 +246,7 @@ def highlander_lda(layer_index, init_input, init_labels, model, module, module_t
         # W[classes.size*2:classes.size*2+2, :] = w
         # B[classes.size*2:classes.size*2+2] = b
 
-        W, B = _basic_procedure(W, B, module, module_type)
+        W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
     # Last layer
@@ -266,7 +287,7 @@ def lpca(layer_index, init_input, init_labels, model, module, module_type, **kwa
         # Add PCA columns in the second half
         W[:, half_available_columns:2*half_available_columns] = p[:, 0:half_available_columns]
 
-        W, B = _basic_procedure(W, B, module, module_type)
+        W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
     # Last layer
@@ -322,7 +343,7 @@ def reverse_pca(layer_index, init_input, init_labels, model, module, module_type
             B[start_index:end_index] = c[-bias_available_columns:]
             #B[start_index:end_index] = c[0:bias_available_columns]
 
-        W, B = _basic_procedure(W, B, module, module_type)
+        W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
     # Last layer
@@ -389,7 +410,7 @@ def relda(layer_index, init_input, init_labels, model, module, module_type, **kw
             end_index = start_index + bias_available_columns
             B[start_index:end_index] = b[0:bias_available_columns]
 
-        W, B = _basic_procedure(W, B, module, module_type)
+        W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
     # Last layer
@@ -433,7 +454,7 @@ def trimlda(layer_index, init_input, init_labels, model, module, module_type, **
         # Add PCA columns in the second half
         W[:, half_available_columns:2 * half_available_columns] = p[:, 0:half_available_columns]
 
-        W, B = _basic_procedure(W, B, module, module_type)
+        W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
     # Last layer
