@@ -88,11 +88,11 @@ class LDA_Simple(nn.Module):
         )
         # Classification layer
         self.cl = nn.Sequential(
+            Flatten(),
             nn.Linear(in_features=8 * 8 * layer_1_neurons, out_features=num_classes),
         )
 
     def forward(self, x):
         x = self.conv1(x)
-        x = x.view(x.size(0), -1)
         x = self.cl(x)
         return x
