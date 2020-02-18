@@ -39,7 +39,7 @@ class BaseSetup:
     ################################################################################################
     # General setup: model, optimizer, lr scheduler and criterion
     @classmethod
-    def setup_model(cls, model_name, no_cuda, num_classes=None, load_model=None, **kwargs):
+    def setup_model(cls, model_name, no_cuda, num_classes=None, load_model=None, wandb_project=None, **kwargs):
         """Setup the model, load and move to GPU if necessary
 
         Parameters
@@ -52,6 +52,8 @@ class BaseSetup:
             How many different classes there are in our problem. Used for loading the model.
         load_model : string
             Path to a saved model
+        wandb_project : str
+            Token for using the WandDB tool
 
         Returns
         -------
@@ -134,6 +136,11 @@ class BaseSetup:
             logging.info('Transfer model to GPU')
             model = torch.nn.DataParallel(model).cuda()
             cudnn.benchmark = True
+
+        # Magic from WanDB
+        if wandb_project is not None:
+            import wandb
+            wandb.watch(model)
 
         return model
 
