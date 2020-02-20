@@ -114,7 +114,6 @@ def _fit_weights_size(w, module):
 
     return w
 
-
 def _flatten_conv_filters(filters):
     """
     Takes the conv filters and flatten them.
@@ -202,8 +201,8 @@ def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
         W, B = lda.transform(X=init_input, y=init_labels)
 
         # Normalize the weights
-        #W, B = _normalize_weights(W, B)
-        W, B = _standardize_weights(W, B)
+        # W, B = _normalize_weights(W, B)
+        # W, B = _standardize_weights(W, B)
         # W, B = _scale_weights(W, B)
 
         W, B = _basic_procedure(W, B, module)
