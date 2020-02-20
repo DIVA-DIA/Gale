@@ -1,6 +1,7 @@
 import torch.nn as nn
+
 from models.registry import Model
-from models.spectral_models.spectral_models import DiscreteCosine2dConvBlock, InverseDiscreteCosine2dConvBlock
+from models.image_classification.spectral_models.spectral_models import DiscreteCosine2dConvBlock, InverseDiscreteCosine2dConvBlock
 
 
 class Flatten(nn.Module):
