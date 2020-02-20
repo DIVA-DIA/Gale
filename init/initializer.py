@@ -9,10 +9,7 @@ import logging
 import sys
 
 import numpy as np
-import torch
 from sklearn.feature_extraction.image import extract_patches_2d
-
-# DeepDIVA
 from torch import nn
 
 from init import advanced_init
@@ -85,9 +82,11 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
                 logging.error(f"Bias matrix dimension mis-match. Expected {module.bias.data.shape} got {B.shape}")
                 sys.exit(-1)
 
-            # Assign parameters
+            # Assign parameters in-place s.t. the hooks are not broken (e.g. for wandb)
             logging.info('Assign parameters')
-            module.weight.data, module.bias.data = BaseRoutine().move_to_device(W, B, **kwargs)
+            W, B = BaseRoutine().move_to_device(W, B, **kwargs)
+            module.weight.data.copy_(W)
+            module.bias.data.copy_(B)
 
         #######################################################################
         # Forward pass of this layer
