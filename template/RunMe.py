@@ -27,6 +27,7 @@ import colorlog
 import numpy as np
 # Torch related stuff
 import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 # SigOpt
 from sigopt import Connection
