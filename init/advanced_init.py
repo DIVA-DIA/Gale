@@ -2,15 +2,13 @@
 Here are defined the different versions of advanced initialization techniques.
 """
 
-# Utils
+
 import logging
 import math
 import sys
 
 import numpy as np
-# Torch
 import torch
-# Init tools
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from torch import nn
@@ -21,19 +19,67 @@ from init.util import lda
 def _normalize_weights(w, b):
     """
     Given both matrices of bias and weights this function return them normalized between [-1, 1]
-    :param w: nd.array 2D
+    Parameters
+    ----------
+    w: nd.array 2D
         Weight matrix
-    :param b: nd.array 1D
+    b : nd.array 1D
         Bias matrix
-    :return:
+
+    Returns
+    -------
         B and W normalized between [-1, 1]
     """
-    n = 2*math.sqrt(w.shape[0])
-    max_value = (max(np.max(np.abs(b)), np.max(np.abs(w))))
-    w = (w * n) / (max_value * math.sqrt(w.shape[0]))
-    b = (b * n) / (max_value * math.sqrt(w.shape[0]))
+    max_value = max(np.max(np.abs(b)), np.max(np.abs(w)))
+    w = w / max_value
+    b = b / max_value
     return w, b
 
+
+def _scale_weights(w, b):
+    """
+    Given both matrices of bias and weights this function return them scaled such that the
+    standard deviation is scaled accordging to Kaiming He observation, which works best with ReLU
+    See more: https://towardsdatascience.com/weight-initialization-in-neural-networks-a-journey-from-the-basics-to-kaiming-954fb9b47c79
+
+    Parameters
+    ----------
+    w: nd.array 2D
+        Weight matrix
+    b : nd.array 1D
+        Bias matrix
+
+    Returns
+    -------
+        B and W normalized between [-1, 1]
+    """
+    w = w * math.sqrt(2 / w.shape[0])
+    b = b * math.sqrt(2 / w.shape[0])
+    return w, b
+
+
+def _standardize_weights(w, b):
+    """
+    Given both matrices of bias and weights this function return them standardized with 0 mean
+    and unit variance
+
+    Parameters
+    ----------
+    w: nd.array 2D
+        Weight matrix
+    b : nd.array 1D
+        Bias matrix
+
+    Returns
+    -------
+        B and W standard normalized
+    """
+    joint_matrices = np.concatenate((w, np.expand_dims(b, axis=1)), axis=1)
+    mean = np.mean(joint_matrices)
+    std = np.std(joint_matrices)
+    w = (w - mean) / std
+    b = (b - mean) / std
+    return w, b
 
 def _fit_weights_size(w, module):
     """
@@ -155,6 +201,11 @@ def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
         logging.info('LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels)
 
+        # Normalize the weights
+        #W, B = _normalize_weights(W, B)
+        W, B = _standardize_weights(W, B)
+        # W, B = _scale_weights(W, B)
+
         W, B = _basic_procedure(W, B, module)
 
     ###################################################################################################################
@@ -164,7 +215,8 @@ def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
         W, B = lda.discriminants(X=init_input, y=init_labels)
 
         # Normalize the weights
-        W, B = _normalize_weights(W, B)
+        W, B = _standardize_weights(W, B)
+        W, B = _scale_weights(W, B)
 
     return torch.Tensor(W), torch.Tensor(B)
 
