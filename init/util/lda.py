@@ -152,8 +152,7 @@ def discriminants(X, y):
     # Step 1: Computing the mean vectors
     logging.debug('Step 1: Computing the mean vectors')
     for cl in range(NUM_CLASSES):
-        pooled_conv += (float(len(X[y == cl]) - 1) / (
-        len(X) - NUM_CLASSES)) * np.cov(np.transpose(X[y == cl]))
+        pooled_conv += (float(len(X[y == cl]) - 1) / (len(X) - NUM_CLASSES)) * np.cov(np.transpose(X[y == cl]))
 
     # print('Pooled_cov: \n{}'.format(pooled_conv))
 
