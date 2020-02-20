@@ -465,9 +465,10 @@ class RunMe:
         log_folder : String
             The final logging folder tree
         """
+
         if wandb_project is not None:
             import wandb
-            wandb.init(project=wandb_project, name=experiment_name, sync_tensorboard=True)
+            wandb.init(project=wandb_project, name=experiment_name, config=args_dict, sync_tensorboard=True)
 
         LOG_FILE = 'logs.txt'
 
