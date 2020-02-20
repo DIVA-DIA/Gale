@@ -1,10 +1,15 @@
 import torch.nn as nn
 from models.registry import Model
+import torch.nn.functional as F
 
 class Flatten(nn.Module):
     def forward(self, x):
         x = x.view(x.size()[0], -1)
         return x
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * F.sigmoid(x)
 
 #######################################################################################################################
 #######################################################################################################################
@@ -78,12 +83,13 @@ class LDA_Simple(nn.Module):
     def __init__(self, num_classes, **kwargs):
         super(LDA_Simple, self).__init__()
 
-        layer_1_neurons = 16
+        layer_1_neurons = 48
 
         # First layer
         self.conv1 = nn.Sequential(  # in: 32x32x3 out: 8 x 8 x layer_1_neurons
             nn.Conv2d(in_channels=3, out_channels=layer_1_neurons, kernel_size=4, stride=4,
                       padding=0),
+            #Swish()
             nn.Softsign()
         )
         # Classification layer
@@ -96,3 +102,4 @@ class LDA_Simple(nn.Module):
         x = self.conv1(x)
         x = self.cl(x)
         return x
+
