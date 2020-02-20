@@ -194,6 +194,36 @@ def _basic_procedure(w, b, module):
 def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
     network_depth = len(list(list(model.children())[0].children()))
 
+    """ Empirical notes 
+
+
+    Flowers , LDA_simple
+    --------------------
+
+        ONLY FIRST LAYER 
+        > (scale - none) and (normalize - none) are terrible on all levels
+        > All configuration which involve scale have the highest training loss by several orders of magnitude
+        > (standard - none) is the best and adding normalise or scale still "kind of" works but its lowering the 
+            performance on val/test
+
+        ONLY DISC
+        > (none _ Normalize Standardize Scale) is exactly the same as (none _ Standardize Scale)
+        > (none _ Normalize) has the highest performance on validation and the lowest loss on train. It is also the one
+            that gets destroyed the least by the first/second epoch of training
+        > (none _ Normalize Scale) competes with (none _ Normalize) but it has a very slightly higher train loss and 
+            it gets slightly more destroyed the least by the first/second epoch of training. However, it achieves a few
+            percentages more on both validation and test    
+
+        BOTH 
+        > (standard _ Normalize Scale) is achieving similar performances as (none _ Normalize Scale) on validation but 
+            performs much better on the training set (20% higher, around 80% acc)
+        > (standard _ Normalize Standardize Scale) is making 99.6% accuracy on the train set at START and score a low 
+            30% on validation (well below the 50% of (standard _ Normalize Scale) counterpart). Moreover, it stays at 
+            such high training performances with a ridiculously small loss on train set 
+            
+        OTHERS
+        > Initial experimentation seems to favor Swish over Softsign
+    """
     ###################################################################################################################
     # All layers but the last one
     if layer_index < network_depth:
@@ -201,9 +231,9 @@ def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
         W, B = lda.transform(X=init_input, y=init_labels)
 
         # Normalize the weights
-        # W, B = _normalize_weights(W, B)
-        # W, B = _standardize_weights(W, B)
-        # W, B = _scale_weights(W, B)
+        # W, B = _normalize_weights(W, B) commented on purpose, see notes above
+        W, B = _standardize_weights(W, B)
+        # W, B = _scale_weights(W, B) commented on purpose, see notes above
 
         W, B = _basic_procedure(W, B, module)
 
@@ -214,6 +244,7 @@ def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
         W, B = lda.discriminants(X=init_input, y=init_labels)
 
         # Normalize the weights
+        W, B = _normalize_weights(W, B)
         W, B = _standardize_weights(W, B)
         W, B = _scale_weights(W, B)
 
