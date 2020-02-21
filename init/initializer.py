@@ -72,7 +72,9 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
         # Compute data-driven parameters (if a module with weights has been detected in this layer earlier)
         if compute_parameters:
             logging.info(f'Compute data-driven parameters with {init_function}')
-            W, B = getattr(advanced_init, init_function)(index, init_input, init_labels, model, module, **kwargs)
+            W, B = getattr(advanced_init, init_function)(
+                layer_index=index, init_input=init_input, init_labels=init_labels, model=model, module=module, **kwargs
+            )
 
             # Check parameters shape (better safe than sorry...)
             if module.weight.data.shape != W.shape:
