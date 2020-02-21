@@ -15,21 +15,33 @@ class Singleton(type):
 
 class TBWriter(metaclass=Singleton):
 
-    def init(self, log_dir):
+    def init(self, log_dir, wandb_project):
         """Init the output folder and the SummaryWriter object"""
-        self.writer = SummaryWriter(log_dir=log_dir)
+        self.wandb_project = wandb_project
+        if self.wandb_project:
+            import wandb
+            self.writer = wandb
+        else:
+            self.writer = SummaryWriter(log_dir=log_dir)
 
     def add_text(self, tag, text_string, global_step=None, walltime=None):
         """Wrapper around SummaryWriter method"""
-        self.writer.add_text(tag=tag, text_string=text_string, global_step=global_step, walltime=walltime)
+        if self.wandb_project:
+            self.writer.log({tag : self.writer.Table(data=text_string, columns=["Text"]), 'epoch' : global_step})
+        else:
+            self.writer.add_text(tag=tag, text_string=text_string, global_step=global_step, walltime=walltime)
 
     def add_scalar(self, tag, scalar_value, global_step=None, walltime=None):
         """Wrapper around SummaryWriter method"""
-        self.writer.add_scalar(tag=tag, scalar_value=scalar_value, global_step=global_step, walltime=walltime)
+        if self.wandb_project:
+            self.writer.log({tag : scalar_value, 'epoch' : global_step})
+        else:
+            self.writer.add_scalar(tag=tag, scalar_value=scalar_value, global_step=global_step, walltime=walltime)
 
     def close(self):
         """Wrapper around SummaryWriter method"""
-        self.writer.close()
+        if not self.wandb_project:
+            self.writer.close()
 
     def _tensor_to_image(self, image, normalize=False):
         """
@@ -115,8 +127,11 @@ class TBWriter(metaclass=Singleton):
         # Ensuring the data passed as parameter is healthy
         image = self._tensor_to_image(image, normalize)
 
-        # Log image to Tensorboard
-        self.writer.add_image(tag=tag, img_tensor=image, global_step=global_step, dataformats='HWC')
+        # Log image to Tensorboard/WandB
+        if self.wandb_project:
+            self.writer.log({tag : self.writer.Image(image), 'epoch' : global_step})
+        else:
+            self.writer.add_image(tag=tag, img_tensor=image, global_step=global_step, dataformats='HWC')
 
         # Get output folder using the FileHandler from the logger.
         # (Assumes the file handler is the last one)
