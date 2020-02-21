@@ -467,10 +467,6 @@ class RunMe:
             The final logging folder tree
         """
 
-        if wandb_project is not None:
-            import wandb
-            wandb.init(project=wandb_project, name=experiment_name, config=args_dict, sync_tensorboard=True)
-
         LOG_FILE = 'logs.txt'
 
         # Recover dataset name
@@ -549,9 +545,13 @@ class RunMe:
         environment_yml = os.path.join(log_folder, 'environment.yml')
         subprocess.call('conda env export > {}'.format(environment_yml), shell=True)
 
+        if wandb_project is not None:
+            import wandb
+            wandb.init(project=wandb_project, name=experiment_name, config=args_dict)
+
         # Define Tensorboard SummaryWriter
         logging.info('Initialize Tensorboard SummaryWriter')
-        TBWriter().init(log_dir=log_folder)
+        TBWriter().init(log_dir=log_folder, wandb_project=wandb_project)
 
         # Add all parameters to Tensorboard
         TBWriter().add_text(tag='Args', text_string=json.dumps(args_dict))
