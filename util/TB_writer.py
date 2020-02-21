@@ -130,7 +130,7 @@ class TBWriter(metaclass=Singleton):
         # Log image to Tensorboard/WandB
         if self.wandb_project:
             self.writer.log({tag : self.writer.Image(image), 'epoch' : global_step})
-        else: # I am an unicorn
+        else: 
             self.writer.add_image(tag=tag, img_tensor=image, global_step=global_step, dataformats='HWC')
 
         # Get output folder using the FileHandler from the logger.
