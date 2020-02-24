@@ -78,20 +78,31 @@ class RunMe:
         # Get the dict out of the arguments
         args = args.__dict__
 
-        # If wandb is set, initialize it and grab configurations FROM it i.e. in case of sweeps
+        # If Wandb is set, initialize it and grab configurations FROM it i.e. in case of sweeps
         if args['wandb_project'] is not None:
             import wandb
-            experiment_name = "sweep_" + str(args['num_samples']) + "_" + str(args['max_patches'])
-            # wandb.init(project=args['wandb_project'], name=args['experiment_name'], config=args.__dict__)
-            wandb.init(project=args['wandb_project'], name=experiment_name, config=args)
-            args.update(wandb.config._items)
-            args.update({"experiment_name": experiment_name})
+            # Init the tool. This will populate the config in case of sweeps
+            wandb.init(project=args['wandb_project'])
+            # If there are some parameters these have been provided by a sweep
+            if len(wandb.config._items) > 1:
+                # Grab all parameters from the sweep
+                sweep_parameters = wandb.config._items
+                del sweep_parameters['_wandb']
+                for k, v in sweep_parameters.items():
+                    # Update with parameters from the wandb.config s.t. we get the parameters from the sweep
+                    args.update({k:v})
+                    # Append their key:value to the experiment name for clarity in the name on the Website
+                    args['experiment_name'] += "_" + str(k) + ":" + str(v)
+            # Provide all the parameters as configurations to Wandb
+            wandb.config.update(args, allow_val_change=True)
+            wandb.run.name = args['experiment_name']
+            wandb.run.save()
 
         # Select the use case
-        if 'sig_opt' in args:
+        if args['sig_opt'] is not None:
             return cls._run_sig_opt(**args)
         else:
-            if 'inference' in args:
+            if args['inference']:
                 return cls._inference_execute(**args)
             else:
                 return cls._execute(**args)
@@ -503,9 +514,9 @@ class RunMe:
             if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                        kwargs[action.dest] != action.default) \
-                        and action.dest != 'load_model' \
-                        and action.dest != 'input_image':
+                            kwargs[action.dest] != action.default) \
+                            and action.dest != 'load_model' \
+                            and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))
 
         # Build up final logging folder tree with the non-default training parameters
