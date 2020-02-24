@@ -36,7 +36,7 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
         Number of patches to extract. Exact if int, ratio of all possible patches if double.
     """
     # Collect initial data
-    logging.debug('Collect initial data')
+    logging.info(f'Collect initial data #samples={num_samples}')
     X, y = _collect_initial_data(data_loader, num_samples)
 
     ###############################################################################################
