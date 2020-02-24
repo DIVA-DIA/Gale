@@ -75,15 +75,26 @@ class RunMe:
         """
         # Parse all command line arguments
         args, cls.parser = cls._parse_arguments(args)
+        # Get the dict out of the arguments
+        args = args.__dict__
+
+        # If wandb is set, initialize it and grab configurations FROM it i.e. in case of sweeps
+        if args['wandb_project'] is not None:
+            import wandb
+            experiment_name = "sweep_" + str(args['num_samples']) + "_" + str(args['max_patches'])
+            # wandb.init(project=args['wandb_project'], name=args['experiment_name'], config=args.__dict__)
+            wandb.init(project=args['wandb_project'], name=experiment_name, config=args)
+            args.update(wandb.config._items)
+            args.update({"experiment_name": experiment_name})
 
         # Select the use case
-        if getattr(args, 'sig_opt', None) is not None:
-            return cls._run_sig_opt(**args.__dict__)
+        if 'sig_opt' in args:
+            return cls._run_sig_opt(**args)
         else:
-            if getattr(args, 'inference', None):
-                return cls._inference_execute(**args.__dict__)
+            if 'inference' in args:
+                return cls._inference_execute(**args)
             else:
-                return cls._execute(**args.__dict__)
+                return cls._execute(**args)
 
     @classmethod
     def _run_sig_opt(cls, sig_opt, sig_opt_token, sig_opt_runs, sig_opt_project, **kwargs) -> dict:
@@ -492,9 +503,9 @@ class RunMe:
             if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                            kwargs[action.dest] != action.default) \
-                            and action.dest != 'load_model' \
-                            and action.dest != 'input_image':
+                        kwargs[action.dest] != action.default) \
+                        and action.dest != 'load_model' \
+                        and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))
 
         # Build up final logging folder tree with the non-default training parameters
