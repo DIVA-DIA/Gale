@@ -249,6 +249,10 @@ class BaseCLArguments:
                                       choices=optimizer_options,
                                       default='SGD',
                                       help='optimizer to be used for training')
+        parser_optimizer.add_argument('--nesterov',
+                                      action='store_true',
+                                      default=False,
+                                      help='enable Nesterov momentum')
         parser_optimizer.add_argument('--momentum',
                                       type=float,
                                       default=0.9,
