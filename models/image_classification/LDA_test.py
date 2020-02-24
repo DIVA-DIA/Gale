@@ -2,7 +2,7 @@ import torch.nn as nn
 from torch import sigmoid
 
 from models.registry import Model
-import torch.nn.functional as F
+
 
 class Flatten(nn.Module):
     def forward(self, x):
@@ -73,7 +73,6 @@ class LDA_Simple(nn.Module):
             nn.Conv2d(in_channels=3, out_channels=layer_1_neurons, kernel_size=4, stride=4,
                       padding=0),
             Swish()
-            # nn.Softsign()
         )
         # Classification layer
         self.cl = nn.Sequential(
