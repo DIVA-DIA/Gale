@@ -1,19 +1,18 @@
 """
 Here are defined the different versions of advanced initialization techniques.
 """
-
-
+import datetime
+import time
 import logging
 import math
 import sys
 
 import numpy as np
 import torch
-from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from torch import nn
 
-from init.util import lda
+from init.util import lda, pca
 
 
 def _normalize_weights(w, b):
@@ -21,9 +20,9 @@ def _normalize_weights(w, b):
     Given both matrices of bias and weights this function return them normalized between [-1, 1]
     Parameters
     ----------
-    w: nd.array 2D
+    w: ndarray 2D
         Weight matrix
-    b : nd.array 1D
+    b : ndarray 1D
         Bias matrix
 
     Returns
@@ -44,9 +43,9 @@ def _scale_weights(w, b):
 
     Parameters
     ----------
-    w: nd.array 2D
+    w: ndarray 2D
         Weight matrix
-    b : nd.array 1D
+    b : ndarray 1D
         Bias matrix
 
     Returns
@@ -65,9 +64,9 @@ def _standardize_weights(w, b):
 
     Parameters
     ----------
-    w: nd.array 2D
+    w : ndarray 2D
         Weight matrix
-    b : nd.array 1D
+    b : ndarray 1D
         Bias matrix
 
     Returns
@@ -81,35 +80,75 @@ def _standardize_weights(w, b):
     b = (b - mean) / std
     return w, b
 
-def _fit_weights_size(w, module):
-    """
-    Correct the sizes of W  according to the expected size of the module
-    :param w: nd.array 2D
-        Weight matrix
-    :return:
-        W with theirs size fit to expected values of the module
-    """
 
-    out_size = module.out_channels if 'conv' in str(type(module)) else module.out_features
+def _adapt_magnitude(w, b, normalize, standardize, scale):
+    """Scale the magnitude of w and b depending on the choice of the parameters
+
+    Parameters
+    ----------
+    w : ndarray2d
+        Weight matrix
+    b : ndarray2d
+        Bias array
+    normalize : bool
+        Flag for normalizing weights
+    standardize : bool
+        Flag for standardizing weights
+    scale : bool
+        Flag for scaling weights
+
+    Returns
+    -------
+    w : ndarray2d
+        Weight matrix scaled depending on the choice of the parameters
+    b : ndarray2d
+        Bias array scaled depending on the choice of the parameters
+    """
+    if normalize:
+        w, b = _normalize_weights(w, b)
+    if standardize:
+        w, b = _standardize_weights(w, b)
+    if scale:
+        w, b = _scale_weights(w, b)
+    return w, b
+
+
+def _fit_weights_size(w, module):
+    """Correct the sizes of W  according to the expected size of the module
+
+    Parameters
+    ----------
+    w : ndarray 2D
+        Weight matrix
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    Returns
+    -------
+    W : ndarray 2D
+        Weights with theirs size fit to expected values of the module
+    """
+    out_size = module.out_channels if type(module) is nn.Conv2d else module.out_features
 
     # Add default values columns when num_columns < num_desired_dimensions
     if out_size > w.shape[1]:
-        logging.warning("Init weight matrix smaller than the number of neurons (too few columns). "
-                        "Expected {} got {}. "
-                        "Filling missing dimensions with default values. "
-                        .format(out_size, w.shape[1]))
-        default_values = module.weight.data.numpy()
-        if 'conv' in str(type(module)):
-            default_values = _flatten_conv_filters(default_values)
+        logging.warning(f"Init weight matrix smaller than the number of neurons (too few columns). "
+                        f"Expected {out_size} got {w.shape[1]}. "
+                        f"Filling missing dimensions with default values. ")
+        # Get default values (the existing ones) from the network
+        default_values = module.weight.data.cpu().numpy()
+        if type(module) is nn.Conv2d:
+            default_values = _flatten_conv_filters(default_values) # Brings it in the same shape as w
         else:
             default_values = default_values.T  # Linear Layers have neurons x input_dimensions
+        assert len(default_values.shape) == len(w.shape)
+        assert default_values.shape == w.shape
         w = np.hstack((w, default_values[:, w.shape[1]:]))
 
     # Discard extra columns when num_columns > num_desired_dimensions
     if out_size < w.shape[1]:
-        logging.warning("Init weight matrix bigger than the number of neurons. "
-                        "Expected {} got {}. "
-                        "Removing extra columns. ".format(out_size, w.shape[1]))
+        logging.warning(f"Init weight matrix bigger than the number of neurons. "
+                        f"Expected {out_size} got {w.shape[1]}. "
+                        f"Removing extra columns. ")
         w = w[:, :out_size]
 
     return w
@@ -121,10 +160,13 @@ def _flatten_conv_filters(filters):
 
     Parameters:
     -----------
-    :param filters: matrix 4D
-        conv filters 4D: num_filters x in_channels x kernel_size x kernel_size
-    :return:
-        filters flattened
+    filters : ndarray
+        Conv filters in their natural shape 4D: [num_filters x in_channels x kernel_size x kernel_size]
+
+    Returns
+    -------
+    ndarray
+        Filters flattened in shape 2D: [num_filters x (in_channels * kernel_size * kernel_size)]
     """
     assert len(filters.shape) > 2
     return filters.T.reshape(-1, filters.shape[0])
@@ -137,48 +179,54 @@ def _reshape_flattened_conv_filters(filters, kernel_filter_size):
 
     Parameters:
     -----------
-    :param filters: matrix 2D
-        flattened conv filters
-    :param kernel_filter_size: int
-        size of the square filters kernel e.g. 3x3 or 5x5
-    :return:
-        the filters in a conv shape 4D: num_filters x in_channels x kernel_size x kernel_size
+    filters : ndarray
+        Filters flattened in shape 2D: [num_filters x (in_channels * kernel_size * kernel_size)]
+    kernel_filter_size: int
+        Size of the square filters kernel e.g. 3x3 or 5x5
+
+    Returns
+    -------
+    ndarray
+        Conv filters in their natural shape 4D: [num_filters x in_channels x kernel_size x kernel_size]
     """
     return filters.T.reshape(filters.shape[1], -1, kernel_filter_size, kernel_filter_size)
 
 
-def _basic_procedure(w, b, module):
+def _basic_conv_procedure(w, b, module):
     """
-    TODO 
-    
+    Add missing column or remove extra one, set the bias to be the mathematical mean that makes sense and finally
+    reshape the matrix W to match the expected shape of the module.
+         
     Parameters
     ----------
-    w
-    b
-    module
+    w : ndarray2d
+        Weight matrix
+    b : ndarray2d
+        Bias array which should contain the means of the data X
+    module : torch.nn.Module
+        The module in which we'll put the weights
 
     Returns
     -------
-
+    w : ndarray 4d
+        The weight matrix in the same shape and size as expected by the module
+    b : ndarray
+        The bias vector multiplied by the transposed weights (see math formulation)
     """
-    # Check size of W
+    assert type(module) is nn.Conv2d
+    # Correct the sizes of W according to the expected size of the module
     w = _fit_weights_size(w, module)
 
-    # Set B to be -W*mean(X) such that it centers the data
+    # Set B to be -W*mean(X) such that it centers the data. At this point in B there are the means of the data
     b = -np.matmul(w.T, b)
     assert b.shape == module.bias.shape
 
-    # Reshape
-
-    # CONV LAYER
-    if type(module) is nn.Conv2d:
-        w = _reshape_flattened_conv_filters(w, module.kernel_size[0])
-
+    # Reshape W to match the expected shape of the module
+    w = _reshape_flattened_conv_filters(w, module.kernel_size[0])
     # LINEAR LAYER
-    if type(module) is nn.Linear:
-        w = w.T  # Linear Layers have neurons x input_dimensions
-
-    assert (w.shape == module.weight.shape)
+    # if type(module) is nn.Linear:
+    #     w = w.T  # Linear Layers have neurons x input_dimensions
+    assert w.shape == module.weight.shape
 
     # Set W by adding it to the current random values
     # sn_ratio = 1
@@ -187,18 +235,142 @@ def _basic_procedure(w, b, module):
     return w, b
 
 
-#######################################################################################################################
-#######################################################################################################################
-#######################################################################################################################
-#######################################################################################################################
-def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
-    network_depth = len(list(list(model.children())[0].children()))
+def _filter_points_trimlda(init_input, init_labels, iterations):
+    """Given a set of points with their label it fits an LDA classifier and predicts on them.
+    Then, only the samples positively classified are returned. This procedure can be done iteratively
+    multiple times, specifying the amount by the parameter
 
-    """ Empirical notes 
+    Parameters
+    ----------
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    iterations : int
+        Number of iterations for trimming the LDA. If set to 0 nothing is performed
+
+    Returns
+    -------
+    init_input : ndarray 2d
+        Input data, trimmed
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data.
+    """
+    assert iterations >= 0
+    logging.info('Filter points with trim-lda')
+    # Create the solver
+    clf = LinearDiscriminantAnalysis(solver='svd')
+
+    # Initialize to full list
+    input = init_input
+    labels = init_labels
+
+    for i in range(1, iterations+1):
+        start_time = time.time()
+        logging.info(f'Iteration {i} of {iterations} #samples={len(input)}')
+        clf.fit(X=input, y=labels)
+        # Predict on the FULL LIST
+        predictions = clf.predict(init_input)
+        # Keep the input data where it is CORRECTLY predicted
+        locs = np.where(predictions == init_labels)
+        input = init_input[locs]
+        labels = init_labels[locs]
+        logging.info(
+            f'Acc={(len(input)) / len(init_input):.2f} '
+            f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}'
+        )
+
+    return input, labels
 
 
-    Flowers , LDA_simple
-    --------------------
+def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize):
+    """Compute LDA discriminants and relative bias and return them
+
+    Parameters
+    ----------
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+
+    Returns
+    -------
+    w : ndarray2d
+        Weight matrix to compute LDA discriminants
+    b : ndarray2d
+        Bias array relative to W
+    """
+    logging.info('LDA Discriminants')
+    W, B = lda.discriminants(X=init_input, y=init_labels)
+    # Adapt the size of the weights
+    return _adapt_magnitude(w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale)
+
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def pure_lda(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    trim_lda_iterations,
+    **kwargs
+):
+    """Initialize the layer with pure LDA function and pure LDA discriminants for the last layer
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+    trim_lda_iterations : int
+        Number of iterations for the trim lda
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+
+    Notes
+    -----
+
+    Flowers , LDA_simple:
 
         ONLY FIRST LAYER 
         > (scale - none) and (normalize - none) are terrible on all levels
@@ -224,193 +396,469 @@ def pure_lda(layer_index, init_input, init_labels, model, module, **kwargs):
         OTHERS
         > Initial experimentation seems to favor Swish over Softsign
     """
-    ###################################################################################################################
+    network_depth = len(list(list(model.children())[0].children()))
+    init_input, init_labels = _filter_points_trimlda(
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+    )
+
+    ##################################################################
     # All layers but the last one
     if layer_index < network_depth:
-        logging.info('LDA Transform')
+        logging.info('Pure LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels)
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module)
 
-        # Normalize the weights
-        # W, B = _normalize_weights(W, B) commented on purpose, see notes above
-        W, B = _standardize_weights(W, B)
-        # W, B = _scale_weights(W, B) commented on purpose, see notes above
-
-        W, B = _basic_procedure(W, B, module)
-
-    ###################################################################################################################
+    ##################################################################
     # Last layer
     else:
-        logging.info('LDA Discriminants')
-        W, B = lda.discriminants(X=init_input, y=init_labels)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
 
-        # Normalize the weights
-        W, B = _normalize_weights(W, B)
-        W, B = _standardize_weights(W, B)
-        W, B = _scale_weights(W, B)
-
-    return torch.Tensor(W), torch.Tensor(B)
-
+    return torch.from_numpy(W), torch.from_numpy(B)
 
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def mirror_lda(layer_index, init_input, init_labels, model, module, module_type, **kwargs):
-    ###################################################################################################################
+def mirror_lda(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    trim_lda_iterations,
+    **kwargs
+):
+    """Initialize the layer with LDA function, but it duplicates the columns with non-zero eigenvalue and mirrors them
+    and pure LDA discriminants for the last layer
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+    trim_lda_iterations : int
+        Number of iterations for the trim lda
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+    init_input, init_labels = _filter_points_trimlda(
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+    )
+
+    ##################################################################
     # All layers but the last one
-    if layer_index != len(list(model.children())) - 1:
-        logging.info('LDA Transform')
+    if layer_index < network_depth:
+        logging.info('Mirror LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels)
-
         # Compute available columns
-        available_columns = module.weight.data.shape[0]
-
+        available_columns = module.weight.shape[0]
         # Discard dimensions as necessary
         if W.shape[1] * 2 > available_columns:
             W = W[:, 0:int(available_columns / 2)]
-
         # Mirror W. You don't mirror B because it has to be size of mean(X)
         W = np.hstack((W, -W))
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module)
 
-        W, B = _basic_procedure(W, B, module)
-
-    ###################################################################################################################
+    ##################################################################
     # Last layer
     else:
-        logging.info('LDA Discriminants')
-        W, B = lda.discriminants(X=init_input, y=init_labels)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
 
-        # Normalize the weights
-        W, B = _normalize_weights(W, B)
-
-    return torch.Tensor(W), torch.Tensor(B)
+    return torch.from_numpy(W), torch.from_numpy(B)
 
 
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def highlander_lda(layer_index, init_input, init_labels, model, module, module_type, **kwargs):
-    ###################################################################################################################
+def highlander_lda(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    trim_lda_iterations,
+    **kwargs
+):
+    """
+    Initialize the layer with LDA by making a 1 vs ALL comparison for all classes. Thus we can initialize more columns
+    with meaningful numbers. In a regular LDA setting we have C-1 columns where C is the number of classeses. Here we
+    get 2*C because for each class there is a 1vsALL setting which gives us two columns.
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+    trim_lda_iterations : int
+        Number of iterations for the trim lda
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+    init_input, init_labels = _filter_points_trimlda(
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+    )
+
+    ##################################################################
     # All layers but the last one
-    if layer_index != len(list(model.children())) - 1:
-        logging.info('LDA Transform')
+    if layer_index < network_depth:
+        logging.info('Highlander LDA Transform')
 
         # Check if size of model allows (has enough neurons)
-        if module.weight.data.shape[0] < len(np.unique(init_labels)) * 2:
-            logging.error("Model does not have enough neurons. Expected at least |C|*2 got {}"
-                          .format(module.weight.data.shape[0]))
+        if module.weight.shape[0] < len(np.unique(init_labels)) * 2:
+            logging.error(
+                f"Model does not have enough neurons. Expected at least |C|*2 got {module.weight.shape[0]}"
+            )
             sys.exit(-1)
 
-        # Compute available columns per class
-        available_columns = int(module.weight.data.shape[0] / len(np.unique(init_labels)))
+        # Compute available columns per class. We need 2 minimum but we can use more
+        available_columns_per_class = int(module.weight.shape[0] / len(np.unique(init_labels)))
 
         # Init W and B with the default values
-        W = _flatten_conv_filters(module.weight.data.numpy())
-        W = np.zeros(W.shape)
-        B = module.bias.data.numpy()
+        # -> If number of neuron is not a multiple of classes we leave random values in those columns
+        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
+        B = module.bias.data.cpu().numpy()
         classes = np.unique(init_labels)
 
         # |C| times
         for i, l in enumerate(classes):
+            logging.info(f'LDA Transform for class {l}')
             # Make a new set of labels of 1 vs ALL
             tmp_labels = init_labels.copy()
             tmp_labels[np.where(init_labels == l)] = 0
             tmp_labels[np.where(init_labels != l)] = 1
             w, b = lda.transform(X=init_input, y=tmp_labels)
+            # Adapt the size of the weights
+            w, b = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
-            start_index = i * available_columns
-            end_index = start_index + available_columns
-            W[:, start_index:end_index] = w[:, 0:available_columns]
+            start_index = i * available_columns_per_class
+            end_index = start_index + available_columns_per_class
+            W[:, start_index:end_index] = w[:, 0:available_columns_per_class]
+            # Mean of the data is always the same regardless of the labels arrangement
             B = b
 
-        # w, b = lda.transform(X=init_input, y=init_labels)
-        # W[classes.size*2:classes.size*2+2, :] = w
-        # B[classes.size*2:classes.size*2+2] = b
+        # Adapt the size of the weights
+        # W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module)
 
-        W, B = _basic_procedure(W, B, module)
-
-    ###################################################################################################################
+    ##################################################################
     # Last layer
     else:
-        logging.info('LDA Discriminants')
-        W, B = lda.discriminants(X=init_input, y=init_labels)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
 
-        # Normalize the weights
-        W, B = _normalize_weights(W, B)
-
-    return torch.Tensor(W), torch.Tensor(B)
-
+    return torch.from_numpy(W), torch.from_numpy(B)
 
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def lpca(layer_index, init_input, init_labels, model, module, module_type, **kwargs):
-    ###################################################################################################################
+def pure_pca(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    trim_lda_iterations,
+    **kwargs
+):
+    """Initialize the layer with pure PCA and leave the final layer "as it"
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    trim_lda_iterations : int
+        Number of iterations for the trim lda
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+    init_input, init_labels = _filter_points_trimlda(
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+    )
+
+    ##################################################################
     # All layers but the last one
-    if layer_index != len(list(model.children())) - 1:
-        logging.info('LDA Transform')
-        w, B = lda.transform(X=init_input, y=init_labels)
+    if layer_index < network_depth:
         logging.info('PCA Transform')
-        pca = PCA().fit(init_input)
-        p = pca.components_.T  # Don't even think about touching this T!
-        c = pca.mean_
+        W, B = pca.transform(init_input)
 
-        # Init W with zeros of same shape of real weight matrix
-        W = np.zeros(_flatten_conv_filters(module.weight.data.numpy()).shape)
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module)
+    ##################################################################
+    # Last layer
+    else:
+        # Init W and B with the default values
+        W = module.weight.data.cpu().numpy()
+        B = module.bias.data.cpu().numpy()
+
+    return torch.from_numpy(W), torch.from_numpy(B)
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def lpca(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    trim_lda_iterations,
+    **kwargs
+):
+    """Initialize the layer with both PCA and LDA. The amount of columns could be an hyper-parameter
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+    trim_lda_iterations : int
+        Number of iterations for the trim lda
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+    init_input, init_labels = _filter_points_trimlda(
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+    )
+
+    ##################################################################
+    # All layers but the last one
+    if layer_index < network_depth:
+        logging.info('LDA Transform')
+        w, b = lda.transform(X=init_input, y=init_labels)
+        w, B = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        logging.info('PCA Transform')
+        p, c = pca.transform(init_input)
+        p, c = _adapt_magnitude(w=p, b=c, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
         # Compute available columns
-        half_available_columns = int(module.weight.data.shape[0]/2)
+        half_available_columns = int(module.weight.shape[0]/2)
+        if module.weight.shape[0] % 2 != 0:
+            logging.info(
+                f"Not all columns will be initialized as the shape {module.weight.shape[0]} is not divisible by 2"
+            )
 
+        # Init W with zeros of same shape of real weight matrix
+        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
         # Add LDA columns in the first half
         W[:, 0:half_available_columns] = w[:, 0:half_available_columns]
-
         # Add PCA columns in the second half
         W[:, half_available_columns:2*half_available_columns] = p[:, 0:half_available_columns]
 
-        W, B = _basic_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module)
 
-    ###################################################################################################################
+    ##################################################################
     # Last layer
     else:
-        logging.info('LDA Discriminants')
-        W, B = lda.discriminants(X=init_input, y=init_labels)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
 
-        # Normalize the weights
-        W, B = _normalize_weights(W, B)
-
-    return torch.Tensor(W), torch.Tensor(B)
+    return torch.from_numpy(W), torch.from_numpy(B)
 
 
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def reverse_pca(layer_index, init_input, init_labels, model, module, module_type, **kwargs):
-    ###################################################################################################################
+def reverse_pca(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    trim_lda_iterations,
+    **kwargs
+):
+    """Initialize the layer with the reverse PCA procedure. The basic idea is to leverage labels to find which dimensions
+    would minimize the variance within one class i.e. we select the last columns of the PCA matrix L as candidate for
+    the given class. Intuitively these columns are those who express the least variance for the selected class. This
+    approach might be detrimental if two classes share common non-expressive set of features as these will be selected
+    for both classes
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+    trim_lda_iterations : int
+        Number of iterations for the trim lda
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+    init_input, init_labels = _filter_points_trimlda(
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+    )
+
+    ##################################################################
     # All layers but the last one
-    if layer_index != len(list(model.children())) - 1:
+    if layer_index < network_depth:
 
         # Check if size of model allows (has enough neurons)
-        if module.weight.data.shape[0] < len(np.unique(init_labels)) * 2:
-            logging.error("Model does not have enough neurons. Expected at least |C|*2 got {}"
-                          .format(module.weight.data.shape[0]))
+        if module.weight.shape[0] < len(np.unique(init_labels)) * 2:
+            logging.error(
+                f"Model does not have enough neurons. Expected at least |C|*2 got {module.weight.shape[0]}"
+            )
             sys.exit(-1)
 
         # Compute available columns per class
-        available_columns = int(module.weight.data.shape[0] / len(np.unique(init_labels)))
+        available_columns = int(module.weight.shape[0] / len(np.unique(init_labels)))
         bias_available_columns = int(init_input.shape[1] / len(np.unique(init_labels)))
 
         # Init W and B with zeros
-        W = np.zeros(_flatten_conv_filters(module.weight.data.numpy()).shape)
+        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
         B = np.zeros(init_input.shape[1])  # Bias should be size of input because its later multiplied by -Wx
         classes = np.unique(init_labels)
 
         # |C| times
         for i, l in enumerate(classes):
             logging.info('Iteration of class {}'.format(l))
-            # Make a new set of labels of 1 vs ALL
+            # Select only the samples corresponding to a specific class
+            # p, c = pca.transform(init_input[np.where(init_labels == l)])
+            from sklearn.decomposition import PCA
             pca = PCA().fit(init_input[np.where(init_labels == l)])
             p = pca.components_.T  # Don't even think about touching this T!
             c = pca.mean_
@@ -418,160 +866,156 @@ def reverse_pca(layer_index, init_input, init_labels, model, module, module_type
             start_index = i * available_columns
             end_index = start_index + available_columns
             W[:, start_index:end_index] = p[:, -available_columns:]
-            #W[:, start_index:end_index] = p[:, 0:available_columns]
 
             start_index = i * bias_available_columns
             end_index = start_index + bias_available_columns
             B[start_index:end_index] = c[-bias_available_columns:]
-            #B[start_index:end_index] = c[0:bias_available_columns]
 
-        W, B = _basic_procedure(W, B, module)
 
-    ###################################################################################################################
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module)
+
+
+    ##################################################################
     # Last layer
     else:
-        logging.info('LDA Discriminants')
-        W, B = lda.discriminants(X=init_input, y=init_labels)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
 
-        # Normalize the weights
-        W, B = _normalize_weights(W, B)
-
-    return torch.Tensor(W), torch.Tensor(B)
+    return torch.from_numpy(W), torch.from_numpy(B)
 
 
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def relda(layer_index, init_input, init_labels, model, module, module_type, **kwargs):
-    ###################################################################################################################
+def relda(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    trim_lda_iterations,
+    **kwargs
+):
+    """Initialize the layer with repreated LDA (reLDA). The core idea is to split the available columns into a number
+    of iterations s.t. each iteration has the same amount of columns. At each iteration a LDA classifier is fit to the
+    set of samples (the first time on the full set) and then used to make predictions on it. We keep from this LDA the
+    amount of columns at our disposal for the iteration and then take only those samples which have been misclassified.
+    At this point we repeat the process, thus, iteratively, fitting more and more classifiers to being able to
+    collectively correctly classify more samples. At the end of the process, the large part of the set should be able to
+    be correctly classified but not by the same columns. Each set of columns will be responsible to classify a different
+    set of points.
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+    trim_lda_iterations : int
+        Number of iterations for the trim lda
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+    init_input, init_labels = _filter_points_trimlda(
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+    )
+
+    ##################################################################
     # All layers but the last one
-    if layer_index != len(list(model.children())) - 1:
+    if layer_index < network_depth:
 
         # Check if size of model allows (has enough neurons)
-        if module.weight.data.shape[0] < len(np.unique(init_labels)) * 2:
-            logging.error("Model does not have enough neurons. Expected at least |C|*2 got {}"
-                          .format(module.weight.data.shape[0]))
+        if module.weight.shape[0] < len(np.unique(init_labels)) * 2:
+            logging.error(
+                f"Model does not have enough neurons. Expected at least |C|*2 got {module.weight.shape[0]}"
+            )
             sys.exit(-1)
 
         # Compute available columns per class
-        available_columns = int(module.weight.data.shape[0] / len(np.unique(init_labels)))
-        bias_available_columns = int(init_input.shape[1] / len(np.unique(init_labels)))
+        available_columns_per_iteration = int(module.weight.shape[0] / len(np.unique(init_labels)))
+        bias_available_columns_per_iteration = int(init_input.shape[1] / len(np.unique(init_labels)))
 
         # Init W and B with zeros
-        W = np.zeros(_flatten_conv_filters(module.weight.data.numpy()).shape)
+        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
         B = np.zeros(init_input.shape[1])  # Bias should be size of input because its later multiplied by -Wx
         classes = np.unique(init_labels)
 
         # |C| times
         logging.info('LDA Transform (sklearn)')
         clf = LinearDiscriminantAnalysis(solver='svd')
+        initial_size = len(init_input)
         for i, l in enumerate(classes):
-            logging.info('Iteration of class {}, n={}'.format(l, len(init_labels)))
+            logging.info(f'Iteration {l} of {len(classes)} #samples={len(init_input)}')
             if len(init_input) < 1:
                 logging.info('No more wrong samples, exiting loop')
                 break
-
+            logging.info(f'fitting...')
             clf.fit(X=init_input, y=init_labels)
             w = -clf.scalings_
             b = np.mean(init_input, axis=0)
+            # Adapt the size of the weights
+            w, b = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
-            # Filter the input data with the wrong predictions
+            # Filter the input data with the wrong predictions i.e. keep those location where it is WRONGLY predicted
+            logging.info(f'predicting...')
             predictions = clf.predict(init_input)
             locs = np.where(predictions != init_labels)
+            logging.info(f'current acc={1 - float(len(locs[0]))/len(init_input):.2f} ...')
             init_input = init_input[locs]
             init_labels = init_labels[locs]
+            logging.info(f'global integrated acc={(initial_size - len(init_input)) / initial_size:.2f} ...')
 
             # Set main weights
-            start_index = i * available_columns
-            end_index = start_index + np.min([available_columns, w.shape[1]])
-            W[:, start_index:end_index] = w[:, 0:available_columns]
+            start_index = i * available_columns_per_iteration
+            end_index = start_index + np.min([available_columns_per_iteration, w.shape[1]])
+            W[:, start_index:end_index] = w[:, 0:available_columns_per_iteration]
 
             # Set bias
-            start_index = i * bias_available_columns
-            end_index = start_index + bias_available_columns
-            B[start_index:end_index] = b[0:bias_available_columns]
+            # start_index = i * bias_available_columns_per_iteration
+            # end_index = start_index + bias_available_columns_per_iteration
+            # B[start_index:end_index] = b[0:bias_available_columns_per_iteration]
+            # TODO better global bias or bias for each iteration? Same for the other after highlander
+            # Mean of the data is always the same regardless of the labels arrangement
+            B = b
 
-        W, B = _basic_procedure(W, B, module)
+        # Adapt the size of the weights
+        # TODO done above, what is better?
+        # W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module)
 
-    ###################################################################################################################
+    ##################################################################
     # Last layer
     else:
-        logging.info('LDA Discriminants')
-        W, B = lda.discriminants(X=init_input, y=init_labels)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
 
-        # Normalize the weights
-        W, B = _normalize_weights(W, B)
-
-    return torch.Tensor(W), torch.Tensor(B)
-
-
-#######################################################################################################################
-#######################################################################################################################
-#######################################################################################################################
-#######################################################################################################################
-def trimlda(layer_index, init_input, init_labels, model, module, module_type, **kwargs):
-    ###################################################################################################################
-    # All layers but the last one
-    if layer_index != len(list(model.children())) - 1:
-
-        init_input, init_labels = _filter_points_trimlda(init_input, init_labels)
-
-        logging.info('LDA Transform')
-        w, B = lda.transform(X=init_input, y=init_labels)
-        logging.info('PCA Transform')
-        pca = PCA().fit(init_input)
-        p = pca.components_.T  # Don't even think about touching this T!
-        c = pca.mean_
-
-        # Init W with zeros of same shape of real weight matrix
-        W = np.zeros(_flatten_conv_filters(module.weight.data.numpy()).shape)
-
-        # Compute available columns
-        half_available_columns = int(module.weight.data.shape[0] / 2)
-
-        # Add LDA columns in the first half
-        W[:, 0:half_available_columns] = w[:, 0:half_available_columns]
-
-        # Add PCA columns in the second half
-        W[:, half_available_columns:2 * half_available_columns] = p[:, 0:half_available_columns]
-
-        W, B = _basic_procedure(W, B, module)
-
-    ###################################################################################################################
-    # Last layer
-    else:
-        logging.info('LDA Discriminants')
-
-        init_input, init_labels = _filter_points_trimlda(init_input, init_labels)
-
-        # Compute the values with the final set of points retained
-        W, B = lda.discriminants(X=init_input, y=init_labels)
-
-        # Normalize the weights
-        W, B = _normalize_weights(W, B)
-
-    return torch.Tensor(W), torch.Tensor(B)
-
-
-def _filter_points_trimlda(init_input, init_labels):
-
-    logging.info('Filter points with trim-lda')
-
-    clf = LinearDiscriminantAnalysis(solver='svd')
-
-    # Initialize to full list
-    input = init_input
-    labels = init_labels
-
-    for i in range(1, 30):
-        clf.fit(X=input, y=labels)
-
-        # Filter the input data with the wrong predictions on the full data
-        predictions = clf.predict(init_input)
-        locs = np.where(predictions == init_labels)
-        logging.info("Size of locs{}: {}".format(i, len(locs[0])))
-        input = init_input[locs]
-        labels = init_labels[locs]
-
-    return input, labels
+    return torch.from_numpy(W), torch.from_numpy(B)
