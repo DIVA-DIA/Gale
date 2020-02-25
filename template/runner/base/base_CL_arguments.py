@@ -205,7 +205,7 @@ class BaseCLArguments:
         parser_train.add_argument('-b', '--batch-size',
                                   dest='batch_size',
                                   type=int,
-                                  default=64,
+                                  default=128,
                                   help='input batch size for training')
         parser_train.add_argument('--epochs',
                                   type=int,
