@@ -232,7 +232,7 @@ def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
 
     # Set W by adding it to the current random values
     if sn_ratio > 0:
-        w += module.weight.data.numpy() / sn_ratio
+        w += module.weight.data.cpu().numpy() / sn_ratio
 
     return w, b
 
