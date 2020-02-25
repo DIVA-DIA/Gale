@@ -192,7 +192,7 @@ def _reshape_flattened_conv_filters(filters, kernel_filter_size):
     return filters.T.reshape(filters.shape[1], -1, kernel_filter_size, kernel_filter_size)
 
 
-def _basic_conv_procedure(w, b, module):
+def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
     """
     Add missing column or remove extra one, set the bias to be the mathematical mean that makes sense and finally
     reshape the matrix W to match the expected shape of the module.
@@ -205,6 +205,8 @@ def _basic_conv_procedure(w, b, module):
         Bias array which should contain the means of the data X
     module : torch.nn.Module
         The module in which we'll put the weights
+    sn_ratio : float
+        Ratio of noise to be added on the conv weights
 
     Returns
     -------
@@ -229,8 +231,8 @@ def _basic_conv_procedure(w, b, module):
     assert w.shape == module.weight.shape
 
     # Set W by adding it to the current random values
-    # sn_ratio = 1
-    # w = module.weight.data.numpy() / sn_ratio + w
+    if sn_ratio > 0:
+        w += module.weight.data.numpy() / sn_ratio
 
     return w, b
 
@@ -477,7 +479,7 @@ def pure_lda(
         W, B = lda.transform(X=init_input, y=init_labels)
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
-        W, B = _basic_conv_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
     ##################################################################
     # Last layer
@@ -559,7 +561,7 @@ def mirror_lda(
         W = np.hstack((W, -W))
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
-        W, B = _basic_conv_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
     ##################################################################
     # Last layer
@@ -670,7 +672,7 @@ def highlander_lda(
 
         # Adapt the size of the weights
         # W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
-        W, B = _basic_conv_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
     ##################################################################
     # Last layer
@@ -738,7 +740,7 @@ def pure_pca(
 
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
-        W, B = _basic_conv_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
     ##################################################################
     # Last layer
     else:
@@ -830,7 +832,7 @@ def lpca(
         # Add PCA columns in the second half
         W[:, half_available_columns:2*half_available_columns] = p[:, 0:half_available_columns]
 
-        W, B = _basic_conv_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
     ##################################################################
     # Last layer
@@ -943,7 +945,7 @@ def reverse_pca(
 
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
-        W, B = _basic_conv_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
 
     ##################################################################
@@ -1080,7 +1082,7 @@ def relda(
         # Adapt the size of the weights
         # TODO done above, what is better?
         # W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
-        W, B = _basic_conv_procedure(W, B, module)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
     ##################################################################
     # Last layer
