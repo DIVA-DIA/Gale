@@ -318,6 +318,75 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
+def random(
+    layer_index,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    **kwargs
+):
+    """Initialize the layer default values from the framework. See:
+
+        https://pytorch.org/docs/stable/nn.html#linear-layers
+        https://pytorch.org/docs/stable/nn.html#convolution-layers
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+
+    ##################################################################
+    # All layers but the last one
+    if layer_index < network_depth:
+        # Init W and B with the default values
+        W = module.weight.data.cpu().numpy()
+        B = module.bias.data.cpu().numpy()
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(
+            w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale
+        )
+
+    ##################################################################
+    # Last layer
+    else:
+        # Init W and B with the default values
+        W = module.weight.data.cpu().numpy()
+        B = module.bias.data.cpu().numpy()
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(
+            w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale
+        )
+
+    return torch.from_numpy(W), torch.from_numpy(B)
+
+
 def pure_lda(
     layer_index,
     init_input,
