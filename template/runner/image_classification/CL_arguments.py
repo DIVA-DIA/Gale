@@ -82,3 +82,7 @@ class CLArguments(BaseCLArguments):
                                  type=int,
                                  default=0,
                                  help='number of iterations for trimming the points of the lda')
+        parser_init.add_argument('--sn-ratio',
+                                 type=float,
+                                 default=0,
+                                 help='ratio of noise to be added on the conv weights')
