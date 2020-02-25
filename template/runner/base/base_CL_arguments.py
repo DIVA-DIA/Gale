@@ -272,7 +272,7 @@ class BaseCLArguments:
                                       help='learning rate to be used for training')
         parser_optimizer.add_argument('--epoch-lrscheduler-name',
                                       choices=lrscheduler_options,
-                                      default=[],
+                                      default=['ReduceLROnPlateau'],
                                       nargs='+',
                                       help='learning rate schedulers to be called after every epoch')
         parser_optimizer.add_argument('--batch-lrscheduler-name',
@@ -296,6 +296,10 @@ class BaseCLArguments:
                                       type=float,
                                       default=0.1,
                                       help='decrease lr by a factor of lr-gamma')
+        parser_optimizer.add_argument('--mode',
+                                      type=str,
+                                      default='max',
+                                      help='parameter for torch.optim.lr_scheduler.ReduceLROnPlateau scheduler')
 
     def _criterion_options(self):
         """ Options specific for optimizers """
