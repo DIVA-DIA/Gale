@@ -1,92 +1,96 @@
+import multiprocessing as mp
 import os
 import sys
 from multiprocessing import Process, Queue
+import numpy as np
 import torch
 from sigopt import Connection
-import numpy as np
+from pathlib import Path
+# Init SigOpt Paramters ##################################################
+# SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
+SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+SIGOPT_FILE = "sweep/sigopt_sweep_config.json"
+SIGOPT_PROJECT = "init"
 
-SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-#SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-
-# Init System Parameter
+# Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
 #NUM_GPUs = [3, 4, 5, 6, 7]
-CPU_CORES = 64
+CPU_CORES = mp.cpu_count()
 
-# Experiment Parameters
-EXPERIMENT_NAME_PREFIX = "cvpr_v3"
-LOG_FOLDER = "/local/scratch/albertim/output_spectral"
-NUMBER_EPOCHS = 50 # For CB55 is /5
-RUNS_PER_MODEL = 30
-RUNS_PER_VARIANCE = 20
-PROCESSES_PER_GPU = 2
+# Experiment Parameters ##################################################
+EXPERIMENT_NAME_PREFIX = "init_v1"
+OUTPUT_FOLDER = "/HOME/albertim/output_init"
+EPOCHS = 20 # For CB55 is /10
+RUNS_PER_INSTANCE = 3 # 150 # 10+ * num of parameters to optimize usually
+RUNS_PER_VARIANCE = 2
+PROCESSES_PER_GPU = 1
+
+##########################################################################
 
 MODELS = [
-    "BaselineDeep",
-    "BaselineConv",
-    "RNDFirst",
-    "RNDBidir",
-    "DCTFirst",
-    #"DCTFirst_Fixed",
-    "FFTFirst",
-    #"FFTFirst_Fixed",
-    "DCTBidir",
-    #"DCTBidir_Fixed",
-    "FFTBidir",
-    #"FFTBidir_Fixed",
-    "resnet18",
-    "alexnet",
+    "LDA_Simple",
 ]
 
 DATASETS = [
-    #"/local/scratch/dataset/ColorectalHist",
-    #"/local/scratch/dataset/CB55",
-    #"/local/scratch/dataset/Flowers",
-    #"/local/scratch/dataset/HAM10000",
-    #"/local/scratch/dataset/ImageNet",
-    "/local/scratch/dataset/CIFAR10",
-    # "/local/scratch/dataset/signatures/GPDS-last100/genuine",
+    "/HOME/albertim/dataset/DIVA-HisDB/CB55",
+    # "/HOME/albertim/dataset/HAM10000",
+    # "/HOME/albertim/dataset/CIFAR10",
+    # "/HOME/albertim/dataset/ColorectalHist",
+    # "/HOME/albertim/dataset/Flowers",
+    # "/HOME/albertim/dataset/ImageNet",
+    # "/HOME/albertim/dataset/signatures/GPDS-last100/genuine",
+]
+
+INIT = [
+    "random",
+    # "pure_lda",
+    #"mirror_lda",
+    #"highlander_lda",
+    #"pure_pca",
+    #"lpca",
+    #"reverse_pca",
+    #"relda",
 ]
 
 ##########################################################################
 # Creating Experiments
 ##########################################################################
 class Experiment(object):
-    def __init__(self,
-                 experiment_name_prefix,
-                 model_name,
-                 output_folder,
-                 dataset_folder,
-                 number_epochs,
-                 additional,
-                 gpu_index=None,):
-        self.experiment_name_prefix = experiment_name_prefix
+    def __init__(
+        self,
+        experiment_name_prefix : str,
+        model_name : str,
+        output_folder : str,
+        input_folder : str,
+        epochs : int ,
+        init : str,
+        additional : str,
+        gpu_index : int = None,
+    ):
+        self.experiment_name = experiment_name_prefix + '_' + init + '_' + Path(input_folder).stem
         self.model_name = model_name
         self.output_folder = output_folder
-        self.dataset_folder = dataset_folder
-        self.number_epochs = number_epochs
+        self.input_folder = input_folder
+        self.epochs = int(epochs/10) if "CB55" in input_folder else epochs
+        self.init = init
         self.additional = additional
         self.gpu_index = gpu_index
 
     def get_cmd(self):
-        cmd = "python template/RunMe.py --ignoregit --disable-dataset-integrity " \
-              "--experiment-name {EXPERIMENT_NAME:s} " \
-              "--model {MODEL:s} " \
-              "--output-folder {OUTPUT_FOLDER:s} " \
-              "--dataset-folder {DATASET_FOLDER:s} " \
-              "--epoch {NUMBER_EPOCHS:d} ".format(
-            EXPERIMENT_NAME=self.experiment_name_prefix + '_' + self.model_name + '_' + self.dataset_folder,
-            MODEL=self.model_name,
-            OUTPUT_FOLDER=self.output_folder,
-            DATASET_FOLDER=self.dataset_folder,
-            NUMBER_EPOCHS=int(self.number_epochs/5) if "CB55" in self.dataset_folder else self.number_epochs)
-
+        cmd = (
+            f"python template/RunMe.py --ignoregit --disable-dataset-integrity "
+            f"-rc ImageClassification --init --nesterov "            
+            f"--experiment-name {self.experiment_name:s} "
+            f"--model {self.model_name:s} "
+            f"--output-folder {self.output_folder:s} "
+            f"--input-folder {self.input_folder:s} "
+            f"--epochs {self.epochs:d} "
+            f"--init-function {self.init:s} "
+        )
         if self.gpu_index is not None:
-            cmd = cmd + " --gpu-id {GPU_ID:d} ".format(GPU_ID=self.gpu_index)
-
+            cmd += f" --gpu-id {self.gpu_index:d} "
         if self.additional:
-            cmd = cmd + self.additional
-
+            cmd += self.additional
         return cmd
 
     def __repr__(self):
@@ -96,27 +100,31 @@ class Experiment(object):
 class ExperimentsBuilder(object):
 
     @staticmethod
-    def build_sigopt_combinations(model_list, dataset_folders_list, experiment_name_prefix, output_folder, epochs):
+    def build_sigopt_combinations():
         experiments = []
-        for dataset in dataset_folders_list:
-            for model in model_list:
-                experiment = Experiment(experiment_name_prefix, model, output_folder, dataset, epochs,
-                                        "--momentum 0.9 "
-                                        "--batch-size 128 "
-                                        "-j {WORKERS:d} "
-                                        "--sig-opt-token {SIGOPT_TOKEN:s} "
-                                        "--sig-opt-runs {RUNS_PER_MODEL:s} "
-                                        "--sig-opt-project {SIGOPT_PROJECT:s} "
-                                        "--sig-opt spectralSigOpt.txt ".format(
-                                            WORKERS=ExperimentsBuilder.num_workers(),
-                                            SIGOPT_TOKEN=SIGOPT_TOKEN,
-                                            RUNS_PER_MODEL=str(RUNS_PER_MODEL),
-                                            SIGOPT_PROJECT="_spectral"))
-                experiments.append(experiment)
+        for dataset in DATASETS:
+            for model in MODELS:
+                for init in INIT:
+                    experiments.append(Experiment(
+                        experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
+                        model_name=model,
+                        output_folder=OUTPUT_FOLDER,
+                        input_folder=dataset,
+                        epochs=EPOCHS,
+                        init=init,
+                        additional = (
+                            f"--wandb-project sigopt_{Path(dataset).stem}_{init} "
+                            f"-j {ExperimentsBuilder.num_workers():d} "
+                            f"--sig-opt-token {SIGOPT_TOKEN:s} "
+                            f"--sig-opt-runs {str(RUNS_PER_INSTANCE):s} "
+                            f"--sig-opt-project {SIGOPT_PROJECT:s} "
+                            f"--sig-opt {SIGOPT_FILE} "
+                        )
+                    ))
         return experiments
 
     @staticmethod
-    def build_variance_combinations(model_list, dataset_folders_list, experiment_name_prefix, output_folder, epochs):
+    def build_variance_combinations():
         conn = Connection(client_token=SIGOPT_TOKEN)
         conn.set_api_url("https://api.sigopt.com")
 
@@ -126,29 +134,35 @@ class ExperimentsBuilder(object):
             sigopt_list.append(experiment)
 
         experiments = []
-        for dataset in dataset_folders_list:
-            for model in model_list:
-                best_parameters = ExperimentsBuilder._get_best_parameters(conn, sigopt_list, [model, dataset])
-
-                experiments.append(Experiment("multi_" + experiment_name_prefix, model, output_folder, dataset, epochs,
-                                              "--momentum 0.9 "
-                                              "--batch-size 128 "
-                                              "-j {WORKERS:d} "
-                                              "--multi-run {MULTI_RUN:d} "
-                                              "--lr {LR:f} "
-                                              "--weight-decay {WD:f}".format(
-                                                  MULTI_RUN=RUNS_PER_VARIANCE,
-                                                  WORKERS=ExperimentsBuilder.num_workers(),
-                                                  LR=best_parameters["lr"],
-                                                  WD=best_parameters["weight_decay"])
-                                              ))
+        for dataset in DATASETS:
+            for model in MODELS:
+                for init in INIT:
+                    best_parameters = ExperimentsBuilder._get_best_parameters(
+                        conn, sigopt_list, [model, dataset, init]
+                    )
+                    experiments.append(Experiment(
+                        experiment_name_prefix=f"multi_" + EXPERIMENT_NAME_PREFIX,
+                        model_name=model,
+                        output_folder=OUTPUT_FOLDER,
+                        input_folder=dataset,
+                        epochs=EPOCHS,
+                        init=init,
+                        additional=(
+                            f"--wandb-project sigopt_variance_{Path(dataset).stem} "
+                            f"-j {ExperimentsBuilder.num_workers():d} "
+                            f"--multi-run {RUNS_PER_VARIANCE:d} "
+                            # TODO add all param
+                            f"--lr {best_parameters['lr']:f} "
+                            f"--weight-decay {best_parameters['weight_decay']:f} "
+                        )
+                    ))
         return experiments
 
     @staticmethod
     def num_workers() -> int:
         # 'max_' here is meant as "running at the same time"
         max_allowed = len(NUM_GPUs) * PROCESSES_PER_GPU
-        max_needed = len(DATASETS) * len(MODELS)
+        max_needed = len(DATASETS) * len(MODELS) * len(INIT)
         return int(np.floor(CPU_CORES / np.min([max_allowed, max_needed])))
 
     @staticmethod
@@ -162,15 +176,12 @@ class ExperimentsBuilder(object):
     @staticmethod
     def _get_best_parameters(conn, sigopt_list, parts):
         EXPERIMENT_ID = ExperimentsBuilder._retrieve_id_by_name(sigopt_list, parts)
-
         if not EXPERIMENT_ID:
             print("Experiments not found")
             sys.exit(-1)
-
         # Select the experiments with the highest score
         scores = [conn.experiments(ID).best_assignments().fetch().data[0].value for ID in EXPERIMENT_ID]
         EXPERIMENT_ID = EXPERIMENT_ID[scores.index(max(scores))]
-
         # Return the assignments
         return conn.experiments(EXPERIMENT_ID).best_assignments().fetch().data[0].assignments
 
@@ -208,9 +219,7 @@ if __name__ == '__main__':
 
     print("sigopt...")
     experiments = []
-    experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
-        MODELS, DATASETS, EXPERIMENT_NAME_PREFIX, LOG_FOLDER, NUMBER_EPOCHS,
-    ))
+    experiments.extend(ExperimentsBuilder.build_sigopt_combinations())
     # experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
     #     ["RNDBidir"],["/local/scratch/Flowers"], EXPERIMENT_NAME_PREFIX, LOG_FOLDER, NUMBER_EPOCHS,
     # ))
@@ -219,10 +228,7 @@ if __name__ == '__main__':
 
     print("variance...")
     experiments = []
-
-    experiments.extend(ExperimentsBuilder.build_variance_combinations(
-        MODELS, DATASETS, EXPERIMENT_NAME_PREFIX, LOG_FOLDER, NUMBER_EPOCHS,
-    ))
+    experiments.extend(ExperimentsBuilder.build_variance_combinations())
     # experiments.extend(ExperimentsBuilder.build_variance_combinations(
     #     ["FFTBidir"],["/local/scratch/HAM10000"], EXPERIMENT_NAME_PREFIX, LOG_FOLDER, NUMBER_EPOCHS,
     # ))
