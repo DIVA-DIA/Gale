@@ -73,7 +73,10 @@ def _standardize_weights(w, b):
     -------
         B and W standard normalized
     """
-    joint_matrices = np.concatenate((w, np.expand_dims(b, axis=1)), axis=1)
+    logging.debug(f"w={w.shape} b={b.shape}")
+    # The flattening is used for the random init which has the W matrix still in conv-layer shape
+    w_tmp = w if len(w.shape) == 2 else _flatten_conv_filters(w)
+    joint_matrices = np.concatenate((w_tmp, np.expand_dims(b, axis=1)), axis=1)
     mean = np.mean(joint_matrices)
     std = np.std(joint_matrices)
     w = (w - mean) / std
