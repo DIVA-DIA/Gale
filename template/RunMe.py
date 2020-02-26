@@ -161,7 +161,8 @@ class RunMe:
                     kwargs[key.replace("-", "_")] = params[key]
 
                 # Run
-                _, _, score = cls._execute(**kwargs)
+                return_value = cls._execute(**kwargs)
+                score = return_value['test']
 
                 # In case of multi-run the return type will be a list (otherwise is a single float)
                 if type(score) == float:
@@ -244,7 +245,8 @@ class RunMe:
             logging.error('Unhandled error: %s' % repr(exp))
             logging.error(traceback.format_exc())
             logging.error('Execution finished with errors :(')
-            raise SystemExit
+            # Experimental return value to be resilient in case of error while being in a SigOpt optimization
+            return {'train': -1, 'val': -1, 'test': -1}
         finally:
             # Free logging resources
             logging.shutdown()
