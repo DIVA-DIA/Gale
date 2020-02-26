@@ -1,0 +1,76 @@
+[
+    {
+        "name": "weight-decay",
+        "type": "double",
+        "precision": 5,
+        "bounds": {"max": 0.01, "min": 0.0}
+    },
+    {
+        "name": "lr",
+        "type": "double",
+        "precision": 5,
+        "bounds": {"max": 0.1, "min": 0.00001}
+    },
+    {
+        "name": "num-samples",
+        "type": "int",
+        "bounds": {"max": 50000, "min": 10}
+    },
+    {
+        "name": "max-patches",
+        "type": "double",
+        "precision": 1,
+        "bounds": {"max": 0.9, "min": 0.1}
+    },
+    {
+        "name": "conv-normalize",
+        "type": "categorical",
+        "categorical_values": [
+            {"enum_index": 1, "name": "True", "object": "categorical_value"},
+            {"enum_index": 2, "name": "False", "object": "categorical_value"}
+        ]
+    },
+    {
+        "name": "conv-standardize",
+        "type": "categorical",
+        "categorical_values": [
+            {"enum_index": 1, "name": "True", "object": "categorical_value"},
+            {"enum_index": 2, "name": "false", "object": "categorical_value"}
+        ]
+    },
+    {
+        "name": "conv-scale",
+        "type": "categorical",
+        "categorical_values": [
+            {"enum_index": 1, "name": "True", "object": "categorical_value"},
+            {"enum_index": 2, "name": "false", "object": "categorical_value"}
+        ]
+    },
+    {
+        "name": "lin-normalize",
+        "type": "categorical",
+        "categorical_values": [
+            {"enum_index": 1, "name": "True", "object": "categorical_value"},
+            {"enum_index": 2, "name": "false", "object": "categorical_value"}
+        ]
+    },
+    {
+        "name": "lin-standardize",
+        "type": "categorical",
+        "categorical_values": [
+            {"enum_index": 1, "name": "True", "object": "categorical_value"},
+            {"enum_index": 2, "name": "false", "object": "categorical_value"}
+        ]
+    },
+    {
+        "name": "trim-lda-iterations",
+        "type": "int",
+        "bounds": {"max": 10, "min": 0}
+    },
+    {
+        "name": "sn-ratio",
+        "type": "double",
+        "precision": 2,
+        "bounds": {"max": 10.0, "min": 0.0}
+    }
+]
