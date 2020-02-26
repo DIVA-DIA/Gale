@@ -246,7 +246,7 @@ class RunMe:
             logging.error(traceback.format_exc())
             logging.error('Execution finished with errors :(')
             # Experimental return value to be resilient in case of error while being in a SigOpt optimization
-            return {'train': -1, 'val': -1, 'test': -1}
+            return {'train': -1.0, 'val': -1.0, 'test': -1.0}
         finally:
             # Free logging resources
             logging.shutdown()
