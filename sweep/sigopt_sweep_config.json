@@ -24,43 +24,33 @@
     },
     {
         "name": "conv-normalize",
-        "type": "categorical",
-        "categorical_values": [
-            {"enum_index": 1, "name": "True", "object": "categorical_value"},
-            {"enum_index": 2, "name": "False", "object": "categorical_value"}
-        ]
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
     },
     {
         "name": "conv-standardize",
-        "type": "categorical",
-        "categorical_values": [
-            {"enum_index": 1, "name": "True", "object": "categorical_value"},
-            {"enum_index": 2, "name": "false", "object": "categorical_value"}
-        ]
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
     },
     {
         "name": "conv-scale",
-        "type": "categorical",
-        "categorical_values": [
-            {"enum_index": 1, "name": "True", "object": "categorical_value"},
-            {"enum_index": 2, "name": "false", "object": "categorical_value"}
-        ]
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
     },
     {
         "name": "lin-normalize",
-        "type": "categorical",
-        "categorical_values": [
-            {"enum_index": 1, "name": "True", "object": "categorical_value"},
-            {"enum_index": 2, "name": "false", "object": "categorical_value"}
-        ]
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
     },
     {
         "name": "lin-standardize",
-        "type": "categorical",
-        "categorical_values": [
-            {"enum_index": 1, "name": "True", "object": "categorical_value"},
-            {"enum_index": 2, "name": "false", "object": "categorical_value"}
-        ]
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "lin-scale",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
     },
     {
         "name": "trim-lda-iterations",
