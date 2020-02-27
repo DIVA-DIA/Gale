@@ -7,8 +7,8 @@ import torch
 from sigopt import Connection
 from pathlib import Path
 # Init SigOpt Paramters ##################################################
-# SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
+# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/sigopt_sweep_config.json"
 SIGOPT_PROJECT = "init"
 
@@ -16,13 +16,15 @@ SIGOPT_PROJECT = "init"
 NUM_GPUs = range(torch.cuda.device_count())
 #NUM_GPUs = [3, 4, 5, 6, 7]
 CPU_CORES = mp.cpu_count()
+SERVER = 'dana'
+SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
+OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
 EXPERIMENT_NAME_PREFIX = "init_v1"
-OUTPUT_FOLDER = "/HOME/albertim/output_init"
-EPOCHS = 20 # For CB55 is /10
-RUNS_PER_INSTANCE = 3 # 150 # 10+ * num of parameters to optimize usually
-RUNS_PER_VARIANCE = 2
+EPOCHS = 100 # For CB55 is /10
+RUNS_PER_INSTANCE = 150 # 150 # 10+ * num of parameters to optimize usually
+RUNS_PER_VARIANCE = 20
 PROCESSES_PER_GPU = 1
 
 ##########################################################################
@@ -32,24 +34,24 @@ MODELS = [
 ]
 
 DATASETS = [
-    "/HOME/albertim/dataset/DIVA-HisDB/CB55",
-    # "/HOME/albertim/dataset/HAM10000",
-    # "/HOME/albertim/dataset/CIFAR10",
-    # "/HOME/albertim/dataset/ColorectalHist",
-    # "/HOME/albertim/dataset/Flowers",
-    # "/HOME/albertim/dataset/ImageNet",
-    # "/HOME/albertim/dataset/signatures/GPDS-last100/genuine",
+    # SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55",
+    # SERVER_PREFIX + "/dataset/HAM10000",
+    SERVER_PREFIX + "/dataset/CIFAR10",
+    # SERVER_PREFIX + "/dataset/ColorectalHist",
+    # SERVER_PREFIX + "/dataset/Flowers",
+    # SERVER_PREFIX + "/dataset/ImageNet",
+    # SERVER_PREFIX + "/dataset/signatures/GPDS-last100/genuine",
 ]
 
 INIT = [
     "random",
-    # "pure_lda",
+    "pure_lda",
     #"mirror_lda",
     #"highlander_lda",
-    #"pure_pca",
+    "pure_pca",
     #"lpca",
     #"reverse_pca",
-    #"relda",
+    "relda",
 ]
 
 ##########################################################################
