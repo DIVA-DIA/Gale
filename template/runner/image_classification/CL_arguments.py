@@ -54,28 +54,52 @@ class CLArguments(BaseCLArguments):
                                  default=0.99,
                                  help='ratio of patch to extract from each sample for conv layers')
 
+        # Flags for normalizations
+        # parser_init.add_argument("--conv-normalize",
+        #                          type=self.str2bool,
+        #                          help="Flag for normalizing conv weights")
+        # parser_init.add_argument("--conv-standardize",
+        #                          type=self.str2bool,
+        #                          default="True",
+        #                          help="Flag for standardizing conv weights")
+        # parser_init.add_argument("--conv-scale",
+        #                          type=self.str2bool,
+        #                          help="Flag for scaling conv weights")
+        #
+        # parser_init.add_argument("--lin-normalize",
+        #                          type=self.str2bool,
+        #                          default="True",
+        #                          help="Flag for normalizing linear weights")
+        # parser_init.add_argument("--lin-standardize",
+        #                          type=self.str2bool,
+        #                          default="True",
+        #                          help="Flag for standardizing linear weights")
+        # parser_init.add_argument("--lin-scale",
+        #                          type=self.str2bool,
+        #                          default="True",
+        #                          help="Flag for normalizing linear weights")
         parser_init.add_argument("--conv-normalize",
-                                 type=self.str2bool,
+                                 type=int,
                                  help="Flag for normalizing conv weights")
         parser_init.add_argument("--conv-standardize",
-                                 type=self.str2bool,
-                                 default="True",
+                                 type=int,
+                                 default=1,
                                  help="Flag for standardizing conv weights")
         parser_init.add_argument("--conv-scale",
-                                 type=self.str2bool,
+                                 type=int,
                                  help="Flag for scaling conv weights")
 
         parser_init.add_argument("--lin-normalize",
-                                 type=self.str2bool,
+                                 type=int,
                                  default="True",
                                  help="Flag for normalizing linear weights")
         parser_init.add_argument("--lin-standardize",
-                                 type=self.str2bool,
-                                 default="True",
+                                 type=int,
+                                 default=1,
                                  help="Flag for standardizing linear weights")
         parser_init.add_argument("--lin-scale",
-                                 type=self.str2bool,
-                                 default="True",
+                                 type=int,
+                                 default=1,
                                  help="Flag for normalizing linear weights")
 
         parser_init.add_argument('--trim-lda-iterations',
