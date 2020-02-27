@@ -314,6 +314,7 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
         Bias array relative to W
     """
     logging.info('LDA Discriminants')
+
     W, B = lda.discriminants(X=init_input, y=init_labels)
     # Adapt the size of the weights
     return _adapt_magnitude(w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale)

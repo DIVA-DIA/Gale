@@ -246,7 +246,7 @@ class RunMe:
             logging.error(traceback.format_exc())
             logging.error('Execution finished with errors :(')
             # Experimental return value to be resilient in case of error while being in a SigOpt optimization
-            return {'train': -1.0, 'val': -1.0, 'test': -1.0}
+            return_value = {'train': -1.0, 'val': -1.0, 'test': -1.0}
         finally:
             # Free logging resources
             logging.shutdown()
@@ -484,7 +484,6 @@ class RunMe:
         wandb_project : str
             Token for using the WandDB tool
 
-
         Returns
         -------
         log_folder : String
@@ -571,7 +570,7 @@ class RunMe:
 
         if wandb_project is not None:
             import wandb
-            wandb.init(project=wandb_project, name=experiment_name, config=args_dict)
+            wandb.init(project=wandb_project, name=experiment_name, config=args_dict, reinit=True)
 
         # Define Tensorboard SummaryWriter
         logging.info('Initialize Tensorboard SummaryWriter')

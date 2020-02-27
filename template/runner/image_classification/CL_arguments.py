@@ -91,7 +91,7 @@ class CLArguments(BaseCLArguments):
 
         parser_init.add_argument("--lin-normalize",
                                  type=int,
-                                 default="True",
+                                 default=1,
                                  help="Flag for normalizing linear weights")
         parser_init.add_argument("--lin-standardize",
                                  type=int,

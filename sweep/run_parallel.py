@@ -8,7 +8,7 @@ from sigopt import Connection
 from pathlib import Path
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+#SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/sigopt_sweep_config.json"
 SIGOPT_PROJECT = "init"
 
