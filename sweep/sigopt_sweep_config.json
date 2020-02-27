@@ -14,7 +14,7 @@
     {
         "name": "num-samples",
         "type": "int",
-        "bounds": {"max": 50000, "min": 10}
+        "bounds": {"max": 40000, "min": 10}
     },
     {
         "name": "max-patches",
