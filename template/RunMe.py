@@ -79,7 +79,7 @@ class RunMe:
         args = args.__dict__
 
         # If Wandb is set, initialize it and grab configurations FROM it i.e. in case of sweeps
-        if args['wandb_project'] is not None:
+        if args['wandb_sweep']:
             import wandb
             # Init the tool. This will populate the config in case of sweeps
             wandb.init(project=args['wandb_project'])
@@ -108,7 +108,15 @@ class RunMe:
                 return cls._execute(**args)
 
     @classmethod
-    def _run_sig_opt(cls, sig_opt, sig_opt_token, sig_opt_runs, sig_opt_project, **kwargs) -> dict:
+    def _run_sig_opt(
+        cls,
+        sig_opt,
+        sig_opt_token,
+        sig_opt_runs,
+        sig_opt_project,
+        sig_opt_experiment_id,
+        **kwargs
+    ) -> dict:
         """
         This function creates a new SigOpt experiment and optimizes the selected parameters.
 
@@ -125,6 +133,8 @@ class RunMe:
             Number of updates of SigOpt required
         sig_opt_project : str
             SigOpt project name
+        sig_opt_experiment_id : int
+            SigOpt experiment ID for resuming
 
         Returns
         -------
@@ -141,12 +151,16 @@ class RunMe:
             raise SystemExit
         else:
             conn = Connection(client_token=sig_opt_token)
-            experiment = conn.experiments().create(
-                name=kwargs['experiment_name'],
-                parameters=parameters,
-                observation_budget=sig_opt_runs,
-                project=sig_opt_project,
-            )
+            if sig_opt_experiment_id is not None:
+                experiment = conn.experiments(sig_opt_experiment_id).fetch()
+                conn.experiments(experiment.id).suggestions().delete(state="open")
+            else:
+                experiment = conn.experiments().create(
+                    name=kwargs['experiment_name'],
+                    parameters=parameters,
+                    observation_budget=sig_opt_runs,
+                    project=sig_opt_project,
+                )
 
             logging.info("Created experiment: https://sigopt.com/experiment/" + experiment.id)
             for i in range(sig_opt_runs):
@@ -515,9 +529,9 @@ class RunMe:
             if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                            kwargs[action.dest] != action.default) \
-                            and action.dest != 'load_model' \
-                            and action.dest != 'input_image':
+                        kwargs[action.dest] != action.default) \
+                        and action.dest != 'load_model' \
+                        and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))
 
         # Build up final logging folder tree with the non-default training parameters

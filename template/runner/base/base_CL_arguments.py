@@ -117,7 +117,10 @@ class BaseCLArguments:
         parser_sigopt.add_argument('--sig-opt-project',
                                    type=str,
                                    default=None,
-                                   help='place your SigOpt project name ere.')
+                                   help='place your SigOpt project name here.')
+        parser_sigopt.add_argument('--sig-opt-experiment-id',
+                                   type=int,
+                                   help='place your SigOpt experiment id here to resume.')
 
     def _darwin_options(self):
         """ SigOpt options"""
@@ -329,3 +332,7 @@ class BaseCLArguments:
                                   default=None,
                                   required=False,
                                   help='name of your wandb project')
+        parser_wandb.add_argument('--wandb-sweep',
+                                  default=False,
+                                  action='store_true',
+                                  help='Use this to enable wandb sweeps')
