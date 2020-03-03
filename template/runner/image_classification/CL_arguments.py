@@ -10,6 +10,7 @@ class CLArguments(BaseCLArguments):
 
         # Add all options
         self._init_options()
+        self._transform_options()
 
     def parse_arguments(self, args=None):
         args, self.parser = super().parse_arguments(args)
@@ -29,6 +30,29 @@ class CLArguments(BaseCLArguments):
             return False
         else:
             raise argparse.ArgumentTypeError('Boolean value expected.')
+
+    def _transform_options(self):
+        """ Chinko options """
+
+        parser_transform = self.parser.add_argument_group('TRANSFORMS', 'Transforms Options')
+        parser_transform.add_argument("--random-resized-crop",
+                                      default=False,
+                                      action='store_true',
+                                      help='Flag for using transforms.RandomResizedCrop()')
+        parser_transform.add_argument("--random-horizontal-flip",
+                                      default=False,
+                                      action='store_true',
+                                      help='Flag for using transforms.RandomHorizontalFlip()')
+        parser_transform.add_argument("--color-jitter",
+                                      default=None,
+                                      type=float,
+                                      nargs='+',
+                                      help="Specify the brightness, contrast, saturation and hue of the color-jitter transform. Use as --color-jitter float float float float", )
+        parser_transform.add_argument("--rotation",
+                                      default=0,
+                                      type=float,
+                                      help="If present, specifies the random rotation degrees", )
+
 
     def _init_options(self):
         """
@@ -53,53 +77,37 @@ class CLArguments(BaseCLArguments):
                                  type=float,
                                  default=0.99,
                                  help='ratio of patch to extract from each sample for conv layers')
+        parser_init.add_argument('--solver',
+                                 type=str,
+                                 choices=['svd', 'eigen'],
+                                 default='svd',
+                                 help='Which solver is going to be used for LDA operations')
 
         # Flags for normalizations
-        # parser_init.add_argument("--conv-normalize",
-        #                          type=self.str2bool,
-        #                          help="Flag for normalizing conv weights")
-        # parser_init.add_argument("--conv-standardize",
-        #                          type=self.str2bool,
-        #                          default="True",
-        #                          help="Flag for standardizing conv weights")
-        # parser_init.add_argument("--conv-scale",
-        #                          type=self.str2bool,
-        #                          help="Flag for scaling conv weights")
-        #
-        # parser_init.add_argument("--lin-normalize",
-        #                          type=self.str2bool,
-        #                          default="True",
-        #                          help="Flag for normalizing linear weights")
-        # parser_init.add_argument("--lin-standardize",
-        #                          type=self.str2bool,
-        #                          default="True",
-        #                          help="Flag for standardizing linear weights")
-        # parser_init.add_argument("--lin-scale",
-        #                          type=self.str2bool,
-        #                          default="True",
-        #                          help="Flag for normalizing linear weights")
         parser_init.add_argument("--conv-normalize",
                                  type=int,
+                                 default=0,
                                  help="Flag for normalizing conv weights")
         parser_init.add_argument("--conv-standardize",
                                  type=int,
-                                 default=1,
+                                 default=0, # Supposedly 1 is best
                                  help="Flag for standardizing conv weights")
         parser_init.add_argument("--conv-scale",
                                  type=int,
+                                 default=0,
                                  help="Flag for scaling conv weights")
 
         parser_init.add_argument("--lin-normalize",
                                  type=int,
-                                 default=1,
+                                 default=1, # Supposedly 1 is best
                                  help="Flag for normalizing linear weights")
         parser_init.add_argument("--lin-standardize",
                                  type=int,
-                                 default=1,
+                                 default=0, # Supposedly 1 is best
                                  help="Flag for standardizing linear weights")
         parser_init.add_argument("--lin-scale",
                                  type=int,
-                                 default=1,
+                                 default=0, # Supposedly 1 is best
                                  help="Flag for normalizing linear weights")
 
         parser_init.add_argument('--trim-lda-iterations',
