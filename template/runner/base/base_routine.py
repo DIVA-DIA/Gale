@@ -139,7 +139,7 @@ class BaseRoutine:
                     elem = [move_to(e) for e in elem]
                 else:
                     if no_cuda:
-                        elem = elem.cpu()
+                        elem = elem.detach().cpu()
                     else:
                         elem = elem.cuda(non_blocking=True)
             return elem
