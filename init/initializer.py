@@ -10,6 +10,7 @@ import sys
 from itertools import count
 
 import numpy as np
+import torch
 from sklearn.feature_extraction.image import extract_patches_2d
 from torch import nn
 
