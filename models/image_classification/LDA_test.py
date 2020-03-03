@@ -1,3 +1,6 @@
+import math
+
+import torch
 import torch.nn as nn
 from torch import sigmoid
 
@@ -17,11 +20,11 @@ class Swish(nn.Module):
 #######################################################################################################################
 #######################################################################################################################
 @Model
-class InitBaseline(nn.Module):
+class SpectralBaseline(nn.Module):
     expected_input_size = (149, 149)
 
     def __init__(self, num_classes, **kwargs):
-        super(InitBaseline, self).__init__()
+        super(SpectralBaseline, self).__init__()
 
         ocl1 = 32
 
@@ -52,6 +55,59 @@ class InitBaseline(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
+        x = self.fc(x)
+        return x
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+@Model
+class InitBaseline(nn.Module):
+    expected_input_size = (32, 32)
+
+    def __init__(self, num_classes, **kwargs):
+        super(InitBaseline, self).__init__()
+
+        f = 32  # Initial number of dimensions
+
+        # First layer
+        self.conv1 = nn.Sequential(nn.Conv2d(3, f, kernel_size=3, stride=1, padding=1), Swish())
+        # Block 1: 32x32
+        self.conv2 = nn.Sequential(nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish())
+        self.conv3 = nn.Sequential(nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish())
+        self.conv4 = nn.Sequential(nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish())
+        # Last conv + GAP + flatten
+        self.conv5 = nn.Sequential(
+            nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish(),
+            nn.AdaptiveAvgPool2d(output_size=(1, 1)),
+            Flatten(),
+        )
+
+        # Classification layer
+        self.fc = nn.Sequential(
+            nn.Linear(f, num_classes)
+        )
+
+        # Initialize the weights of all layers. For Conv2d and Linear we use "Kaiming .He"
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.bias.data.zero_()
+            if isinstance(m, nn.Linear):
+                n = m.in_features
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+        x = self.conv5(x)
         x = self.fc(x)
         return x
 
