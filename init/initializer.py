@@ -59,7 +59,7 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
             # Fix max patches if is not a ratio
             if max_patches > 1.0:
                 max_patches = int(max_patches)
-            logging.info(f'Get {max_patches} patches of kernel size {kernel_size} from data')
+            logging.info(f'Get {max_patches} patches of kernel size {kernel_size} from {num_samples} samples')
             # Get the patches in a matrix form
             init_input, init_labels = get_patches(X=X, y=y, kernel_size=kernel_size, max_patches=max_patches)
 
