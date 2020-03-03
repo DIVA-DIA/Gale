@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 import torchvision
-from torchvision.transforms import transforms
+from torchvision.transforms import transforms, RandomResizedCrop, RandomRotation
 
 # Gale
 from datasets.custom import OnlyImage
@@ -103,28 +103,51 @@ class ImageClassificationSetup(BaseSetup):
         return ImageFolderDataset(**kwargs)
 
     @classmethod
-    def get_train_transform(cls, model_expected_input_size, **kwargs):
+    def get_train_transform(
+            cls,
+            model_expected_input_size,
+            random_resized_crop,
+            random_horizontal_flip,
+            color_jitter,
+            rotation,
+            **kwargs):
         """Set up the data transform for image classification
-
         Parameters
         ----------
         model_expected_input_size : tuple
            Specify the height and width that the model expects.
-
-        Returns
-        -------
-        transform : torchvision.transforms.transforms.Compose
-           the data transform
+        random_resized_crop : bool
+            Flag for applying the random resized crop
+        random_horizontal_flip : bool
+            Flag for applying the random horizontal flip
+        color_jitter : None or List(float, float, float, float)
+            If not None, specifies  the brightness, contrast, saturation and hue of the color-jitter transform
+        rotation : None or float
+            If not None, specifies the random rotation degrees
         """
-
-        # Loads the analytics csv and extract mean and std
+        transform_list = []
+        # Crop and scale
+        if random_resized_crop:
+            transform_list.append(RandomResizedCrop(model_expected_input_size))
+        else:
+            transform_list.append(transforms.Resize(model_expected_input_size))
+        # Color Jittering
+        if color_jitter is not None:
+            assert len(color_jitter) == 4
+            transform_list.append(transforms.ColorJitter(*color_jitter))
+            # Random grayscale
+            transform_list.append(transforms.RandomGrayscale(p=0.01))
+        # Random horizontal flip
+        if random_horizontal_flip:
+            transform_list.append(transforms.RandomHorizontalFlip())
+        # Random rotation
+        transform_list.append(RandomRotation(degrees=rotation))
+        # To tensor
+        transform_list.append(transforms.ToTensor())
+        # Color Normalization
         mean, std = cls.load_mean_std_from_file(**kwargs)
-        transform = OnlyImage(transforms.Compose([
-            transforms.Resize(model_expected_input_size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=mean, std=std)
-        ]))
-        return transform
+        transform_list.append(transforms.Normalize(mean=mean, std=std))
+        return OnlyImage(transforms.Compose(transform_list))
 
     @classmethod
     def get_test_transform(cls, **kwargs):
