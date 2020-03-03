@@ -338,7 +338,7 @@ def random(
     lin_scale,
     **kwargs
 ):
-    """Initialize the layer default values from the framework. See:
+    """Initialize the layer default values from the network. If left untouched, the default values are as follows:
 
         https://pytorch.org/docs/stable/nn.html#linear-layers
         https://pytorch.org/docs/stable/nn.html#convolution-layers
