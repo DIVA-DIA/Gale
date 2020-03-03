@@ -7,7 +7,10 @@ It computes both the transformation matrix and the linear discriminants
 import logging
 
 import numpy as np
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
+
+SOLVER = 'eigen'
 
 def transform(X, y):
     """
@@ -21,6 +24,7 @@ def transform(X, y):
     :return:
         L=np.array(N,m) = the LDA transformation matrix L
         C=np.array(N,) = a bias vector with zeros (in LDA it must be so!)
+    """
     """
     # Check for sizes
     assert len(X.shape) == 2
@@ -97,96 +101,55 @@ def transform(X, y):
     assert len(X.shape) == 2
     assert len(y.shape) == 1
 
-    clf = LinearDiscriminantAnalysis(solver='eigen')
+    clf = LinearDiscriminantAnalysis(solver=SOLVER)
     clf.fit(X, y)
 
     # The negative is returned to match mathematical definition
     return -clf.scalings_, np.mean(X, axis=0)
-    """
+
 
 
 def discriminants(X, y):
-
     # Check for sizes
     assert len(X.shape) == 2
     assert len(y.shape) == 1
 
-    # TODO this is the scikitlearn implementation. Find out why is different.
-    # shrinkage = None
-    #
-    # _, y_t = np.unique(y, return_inverse=True)  # non-negative ints
-    # priors_ = np.bincount(y_t) / float(len(y))
-    #
-    # # Detect number of unique classes
+    # # Compute linear discriminants
+    # logging.debug('Compute linear discriminants')
     # NUM_CLASSES = len(np.unique(y))
-    # _max_components =  NUM_CLASSES - 1
+    # pooled_conv = np.zeros((X.shape[1], X.shape[1]))
     #
-    # means_ = _class_means(X, y)
-    # covariance_ = _class_cov(X, y, priors_, shrinkage)
+    # # Step 1: Computing the mean vectors
+    # logging.debug('Step 1: Computing the mean vectors')
+    # for cl in range(NUM_CLASSES):
+    #     pooled_conv += (float(len(X[y == cl]) - 1) / (len(X) - NUM_CLASSES)) * np.cov(np.transpose(X[y == cl]))
     #
-    # Sw = covariance_  # within scatter
-    # St = _cov(X, shrinkage)  # total scatter
-    # Sb = St - Sw  # between scatter
+    # # print('Pooled_cov: \n{}'.format(pooled_conv))
     #
-    # #evals, evecs = linalg.eigh(Sb, Sw)
+    # # Step 2: Computing prior probabilities
+    # logging.debug('Step 2: Computing prior probabilities')
+    # prior_prob = []
+    # for cl in range(NUM_CLASSES):
+    #     prior_prob.append(float(len(X[y == cl])) / len(X))
     #
-    # evecs, _, evals  = transform(X, y)
+    # # Step 3: Main routine
+    # logging.debug('Step 3: Main routine')
+    # W = np.zeros((NUM_CLASSES, X.shape[1]))
+    # C = np.zeros(NUM_CLASSES)
+    # for cl in range(NUM_CLASSES):
+    #     logging.debug('Class {}'.format(cl))
+    #     mean_vector = np.mean(X[y == cl], axis=0)
+    #     W[cl] = np.linalg.lstsq(pooled_conv, mean_vector, rcond=None)[0]
+    #     C[cl] = -0.5 * np.matmul(W[cl], np.expand_dims(mean_vector, 0).T) + np.log(prior_prob[cl])
     #
-    # explained_variance_ratio_ = np.sort(evals / np.sum(evals)
-    #                                          )[::-1][:_max_components]
-    # evecs = evecs[:, np.argsort(evals)[::-1]]  # sort eigenvectors
-    # evecs /= np.linalg.norm(evecs, axis=0)
+    # W = W.T
+    # C = C.T
     #
-    # scalings_ = evecs
-    # coef_ = np.dot(means_, evecs).dot(evecs.T)
-    # intercept_ = (-0.5 * np.diag(np.dot(means_, coef_.T)) +
-    #                    np.log(priors_))
-    #
-    # return coef_ , intercept_
+    # logging.debug('Finish')
+    # # We return the transpose because PYTORCH WANT THE MATRIX to be flipped!! BE CAREFUL WHEN THINKING ABOUT THIS!
+    # return W.T, C.T
 
-    # Compute linear discriminants
-    logging.debug('Compute linear discriminants')
-    NUM_CLASSES = len(np.unique(y))
-    pooled_conv = np.zeros((X.shape[1], X.shape[1]))
-
-    # Step 1: Computing the mean vectors
-    logging.debug('Step 1: Computing the mean vectors')
-    for cl in range(NUM_CLASSES):
-        pooled_conv += (float(len(X[y == cl]) - 1) / (len(X) - NUM_CLASSES)) * np.cov(np.transpose(X[y == cl]))
-
-    # print('Pooled_cov: \n{}'.format(pooled_conv))
-
-    # Step 2: Computing prior probabilities
-    logging.debug('Step 2: Computing prior probabilities')
-    prior_prob = []
-    for cl in range(NUM_CLASSES):
-        prior_prob.append(float(len(X[y == cl])) / len(X))
-
-    # Step 3: Main routine
-    logging.debug('Step 3: Main routine')
-    W = np.zeros((NUM_CLASSES, X.shape[1]))
-    C = np.zeros(NUM_CLASSES)
-    for cl in range(NUM_CLASSES):
-        logging.debug('Class {}'.format(cl))
-        mean_vector = np.mean(X[y == cl], axis=0)
-        W[cl] = np.linalg.lstsq(pooled_conv, mean_vector, rcond=None)[0]
-        C[cl] = -0.5 * np.matmul(W[cl], np.expand_dims(mean_vector, 0).T) + np.log(prior_prob[cl])
-
-    W = W.T
-    C = C.T
-
-    logging.debug('Finish')
-    # We return the transpose because PYTORCH WANT THE MATRIX to be flipped!! BE CAREFUL WHEN THINKING ABOUT THIS!
-    return W.T, C.T
-
-    # """
-    # L = np.matmul(X,W)+ C
-    # sum = np.zeros(len(X))
-    # P = np.zeros((len(X),NUM_CLASSES))
-    # for i in range(len(X)):
-    #     for cl in range(NUM_CLASSES):
-    #         sum[i] += np.exp(L[i,cl])
-    #
-    #     for cl in range(NUM_CLASSES):
-    #         P[i,cl] = np.exp(L[i,cl]) / sum[i]
-    # """
+    # Create the solver
+    clf = LinearDiscriminantAnalysis(solver=SOLVER)
+    clf.fit(X=X, y=y)
+    return clf.coef_, clf.intercept_
