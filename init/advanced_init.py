@@ -266,7 +266,7 @@ def _filter_points_trimlda(init_input, init_labels, iterations, solver, **kwargs
         Labels corresponding to the input data.
     """
     assert iterations >= 0
-    logging.info('Filter points with trim-lda')
+
     # Create the solver
     clf = LinearDiscriminantAnalysis(solver=solver)
 
@@ -275,6 +275,7 @@ def _filter_points_trimlda(init_input, init_labels, iterations, solver, **kwargs
     labels = init_labels
 
     for i in range(1, iterations+1):
+        logging.info('Filter points with trim-lda')
         start_time = time.time()
         logging.info(f'\titeration {i} of {iterations} #samples={len(input)}')
         clf.fit(X=input, y=labels)
