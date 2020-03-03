@@ -144,7 +144,7 @@ def _fit_weights_size(w, module):
         else:
             default_values = default_values.T  # Linear Layers have neurons x input_dimensions
         assert len(default_values.shape) == len(w.shape)
-        assert default_values.shape == w.shape
+        assert default_values.shape[0] == w.shape[0]
         w = np.hstack((w, default_values[:, w.shape[1]:]))
 
     # Discard extra columns when num_columns > num_desired_dimensions
@@ -240,7 +240,7 @@ def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
     return w, b
 
 
-def _filter_points_trimlda(init_input, init_labels, iterations):
+def _filter_points_trimlda(init_input, init_labels, iterations, solver, **kwargs):
     """Given a set of points with their label it fits an LDA classifier and predicts on them.
     Then, only the samples positively classified are returned. This procedure can be done iteratively
     multiple times, specifying the amount by the parameter
@@ -255,7 +255,9 @@ def _filter_points_trimlda(init_input, init_labels, iterations):
         Labels corresponding to the input data. The size is same as `init_input`
     iterations : int
         Number of iterations for trimming the LDA. If set to 0 nothing is performed
-
+    solver : str
+        Either 'eigen' or 'svd'
+        
     Returns
     -------
     init_input : ndarray 2d
@@ -266,7 +268,7 @@ def _filter_points_trimlda(init_input, init_labels, iterations):
     assert iterations >= 0
     logging.info('Filter points with trim-lda')
     # Create the solver
-    clf = LinearDiscriminantAnalysis(solver='svd')
+    clf = LinearDiscriminantAnalysis(solver=solver)
 
     # Initialize to full list
     input = init_input
@@ -274,7 +276,7 @@ def _filter_points_trimlda(init_input, init_labels, iterations):
 
     for i in range(1, iterations+1):
         start_time = time.time()
-        logging.info(f'Iteration {i} of {iterations} #samples={len(input)}')
+        logging.info(f'\titeration {i} of {iterations} #samples={len(input)}')
         clf.fit(X=input, y=labels)
         # Predict on the FULL LIST
         predictions = clf.predict(init_input)
@@ -283,14 +285,14 @@ def _filter_points_trimlda(init_input, init_labels, iterations):
         input = init_input[locs]
         labels = init_labels[locs]
         logging.info(
-            f'Acc={(len(input)) / len(init_input):.2f} '
+            f'\tAcc={(len(input)) / len(init_input):.2f} '
             f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}'
         )
 
     return input, labels
 
 
-def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize):
+def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs):
     """Compute LDA discriminants and relative bias and return them
 
     Parameters
@@ -315,7 +317,7 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
     """
     logging.info('LDA Discriminants')
 
-    W, B = lda.discriminants(X=init_input, y=init_labels)
+    W, B = lda.discriminants(X=init_input, y=init_labels, **kwargs)
     # Adapt the size of the weights
     return _adapt_magnitude(w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale)
 
@@ -473,14 +475,14 @@ def pure_lda(
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
     )
 
     ##################################################################
     # All layers but the last one
     if layer_index < network_depth:
         logging.info('Pure LDA Transform')
-        W, B = lda.transform(X=init_input, y=init_labels)
+        W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
@@ -488,7 +490,7 @@ def pure_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -548,14 +550,14 @@ def mirror_lda(
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
     )
 
     ##################################################################
     # All layers but the last one
     if layer_index < network_depth:
         logging.info('Mirror LDA Transform')
-        W, B = lda.transform(X=init_input, y=init_labels)
+        W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
         # Compute available columns
         available_columns = module.weight.shape[0]
         # Discard dimensions as necessary
@@ -570,7 +572,7 @@ def mirror_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -633,7 +635,7 @@ def highlander_lda(
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
     )
 
     ##################################################################
@@ -664,7 +666,7 @@ def highlander_lda(
             tmp_labels = init_labels.copy()
             tmp_labels[np.where(init_labels == l)] = 0
             tmp_labels[np.where(init_labels != l)] = 1
-            w, b = lda.transform(X=init_input, y=tmp_labels)
+            w, b = lda.transform(X=init_input, y=tmp_labels, **kwargs)
             # Adapt the size of the weights
             w, b = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
@@ -681,7 +683,7 @@ def highlander_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -733,7 +735,7 @@ def pure_pca(
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
     )
 
     ##################################################################
@@ -809,14 +811,14 @@ def lpca(
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
     )
 
     ##################################################################
     # All layers but the last one
     if layer_index < network_depth:
         logging.info('LDA Transform')
-        w, b = lda.transform(X=init_input, y=init_labels)
+        w, b = lda.transform(X=init_input, y=init_labels, **kwargs)
         w, B = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         logging.info('PCA Transform')
         p, c = pca.transform(init_input)
@@ -841,7 +843,7 @@ def lpca(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -905,7 +907,7 @@ def reverse_pca(
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
     )
 
     ##################################################################
@@ -955,7 +957,7 @@ def reverse_pca(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -1022,39 +1024,44 @@ def relda(
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations
+        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
     )
 
     ##################################################################
     # All layers but the last one
     if layer_index < network_depth:
 
+        classes = np.unique(init_labels)
+
         # Check if size of model allows (has enough neurons)
-        if module.weight.shape[0] < len(np.unique(init_labels)) * 2:
+        if module.weight.shape[0] < len(classes) * 2:
             logging.error(
-                f"Model does not have enough neurons. Expected at least |C|*2 got {module.weight.shape[0]}"
+                f"Model does not have enough neurons to make sense.Expected at least |C|*2 got {module.weight.shape[0]}"
             )
             sys.exit(-1)
-
-        # Compute available columns per class
-        available_columns_per_iteration = int(module.weight.shape[0] / len(np.unique(init_labels)))
-        bias_available_columns_per_iteration = int(init_input.shape[1] / len(np.unique(init_labels)))
 
         # Init W and B with zeros
         W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
         B = np.zeros(init_input.shape[1])  # Bias should be size of input because its later multiplied by -Wx
-        classes = np.unique(init_labels)
 
-        # |C| times
-        logging.info('LDA Transform (sklearn)')
-        clf = LinearDiscriminantAnalysis(solver='svd')
+        # Compute available columns per class
+        available_columns_per_iteration = len(classes) - 1
+        # Compute number of iterations
+        N = int(module.weight.shape[0] / available_columns_per_iteration)
+
+        # N times
+        logging.info('LDA Transform')
+        clf = LinearDiscriminantAnalysis(solver=kwargs['solver'])
         initial_size = len(init_input)
-        for i, l in enumerate(classes):
-            logging.info(f'Iteration {l} of {len(classes)} #samples={len(init_input)}')
+        for i in range(N):
+            logging.info(f'Iteration {i+1} of {N} #samples={len(init_input)}')
             if len(init_input) < 1:
-                logging.info('No more wrong samples, exiting loop')
+                logging.info('No more wrong samples -> exiting loop')
                 break
-            logging.info(f'fitting...')
+            if len(init_input) == len(np.unique(init_labels)):
+                logging.info('Number of samples is equal to the number of classes -> exiting loop')
+                break
+            logging.info(f'\tfitting...')
             clf.fit(X=init_input, y=init_labels)
             w = -clf.scalings_
             b = np.mean(init_input, axis=0)
@@ -1062,13 +1069,13 @@ def relda(
             w, b = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
             # Filter the input data with the wrong predictions i.e. keep those location where it is WRONGLY predicted
-            logging.info(f'predicting...')
+            logging.info(f'\tpredicting...')
             predictions = clf.predict(init_input)
             locs = np.where(predictions != init_labels)
-            logging.info(f'current acc={1 - float(len(locs[0]))/len(init_input):.2f} ...')
+            logging.info(f'\tcurrent acc={1 - float(len(locs[0]))/len(init_input):.2f} ...')
             init_input = init_input[locs]
             init_labels = init_labels[locs]
-            logging.info(f'global integrated acc={(initial_size - len(init_input)) / initial_size:.2f} ...')
+            logging.info(f'\tglobal integrated acc={(initial_size - len(init_input)) / initial_size:.2f} ...')
 
             # Set main weights
             start_index = i * available_columns_per_iteration
@@ -1091,6 +1098,6 @@ def relda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
