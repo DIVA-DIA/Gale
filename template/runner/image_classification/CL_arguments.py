@@ -68,7 +68,7 @@ class CLArguments(BaseCLArguments):
                                  help='use advanced init methods such as LDA')
         parser_init.add_argument('--num-samples',
                                  type=int,
-                                 default=50000,
+                                 default=1,
                                  help='number of samples to use to perform data-driven initialization')
         parser_init.add_argument('--init-function',
                                  choices=init_options,
