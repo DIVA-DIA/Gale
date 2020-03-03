@@ -31,12 +31,13 @@ PROCESSES_PER_GPU = 1
 
 MODELS = [
     "LDA_Simple",
+    # "InitBaseline"
 ]
 
 DATASETS = [
     # SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55",
-    # SERVER_PREFIX + "/dataset/HAM10000",
-    SERVER_PREFIX + "/dataset/CIFAR10",
+    SERVER_PREFIX + "/dataset/HAM10000",
+    # SERVER_PREFIX + "/dataset/CIFAR10",
     # SERVER_PREFIX + "/dataset/ColorectalHist",
     # SERVER_PREFIX + "/dataset/Flowers",
     # SERVER_PREFIX + "/dataset/ImageNet",
@@ -44,14 +45,14 @@ DATASETS = [
 ]
 
 INIT = [
-    "random",
-    "pure_lda",
-    #"mirror_lda",
-    #"highlander_lda",
-    "pure_pca",
-    #"lpca",
-    #"reverse_pca",
-    "relda",
+    ("random", None),
+    ("pure_lda", None),
+    #("mirror_lda", None),
+    #("highlander_lda", None),
+    ("pure_pca", None),
+    #("lpca", None),
+    #("reverse_pca", None),
+    # ("relda", None),
 ]
 
 ##########################################################################
@@ -106,7 +107,17 @@ class ExperimentsBuilder(object):
         experiments = []
         for dataset in DATASETS:
             for model in MODELS:
-                for init in INIT:
+                for (init, experiment_id) in INIT:
+                    additional = (
+                        f"--wandb-project sigopt_{Path(dataset).stem}_{init} "
+                        f"-j {ExperimentsBuilder.num_workers():d} "
+                        f"--sig-opt-token {SIGOPT_TOKEN:s} "
+                        f"--sig-opt-runs {str(RUNS_PER_INSTANCE):s} "
+                        f"--sig-opt-project {SIGOPT_PROJECT:s} "
+                        f"--sig-opt {SIGOPT_FILE} "
+                    )
+                    if experiment_id is not None:
+                        additional += f"--sig-opt-experiment-id {experiment_id} "
                     experiments.append(Experiment(
                         experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
                         model_name=model,
@@ -114,14 +125,7 @@ class ExperimentsBuilder(object):
                         input_folder=dataset,
                         epochs=EPOCHS,
                         init=init,
-                        additional = (
-                            f"--wandb-project sigopt_{Path(dataset).stem}_{init} "
-                            f"-j {ExperimentsBuilder.num_workers():d} "
-                            f"--sig-opt-token {SIGOPT_TOKEN:s} "
-                            f"--sig-opt-runs {str(RUNS_PER_INSTANCE):s} "
-                            f"--sig-opt-project {SIGOPT_PROJECT:s} "
-                            f"--sig-opt {SIGOPT_FILE} "
-                        )
+                        additional = additional
                     ))
         return experiments
 
@@ -138,7 +142,7 @@ class ExperimentsBuilder(object):
         experiments = []
         for dataset in DATASETS:
             for model in MODELS:
-                for init in INIT:
+                for (init, experiment_id) in INIT:
                     best_parameters = ExperimentsBuilder._get_best_parameters(
                         conn, sigopt_list, [model, dataset, init]
                     )
