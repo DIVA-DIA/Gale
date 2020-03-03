@@ -7,6 +7,7 @@ has two functions) one should implement his own init function.
 # Utils
 import logging
 import sys
+from itertools import count
 
 import numpy as np
 from sklearn.feature_extraction.image import extract_patches_2d
@@ -132,13 +133,19 @@ def _collect_initial_data(data_loader, num_samples):
     """
     X = []
     y = []
-    for i, (input, target) in enumerate(data_loader, start=1):
-        X.append(input)
-        y.append(target['category_id'])
-        # If you collected enough samples leave. This makes a precision of +-data_loader.batch_size. See documentation
-        if i * data_loader.batch_size >= num_samples:
-            break
-    return X, y
+    # This is necessary because last batches might not have size mini-batch but smaller!
+    collected_so_far = 0
+    # Iterate troughs the dataset as many times as necessary to collect the amount samples required
+    for j in count(1):
+        for i, (input, target) in enumerate(data_loader, start=1):
+            X.append(input)
+            y.append(target['category_id'])
+            collected_so_far += len(input)
+            # If you collected enough samples leave. This makes a precision of +-data_loader.batch_size. See documentation
+            if collected_so_far >= num_samples:
+                return X, y
+        logging.warning(f"Iterated trough the entire dataset {j} times already. "
+                        f"Have {collected_so_far} samples. Keeping collecting...")
 
 
 def get_module_from_sequential_layer(layer):
