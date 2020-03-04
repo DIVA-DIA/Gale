@@ -109,13 +109,13 @@ class RunMe:
 
     @classmethod
     def _run_sig_opt(
-        cls,
-        sig_opt,
-        sig_opt_token,
-        sig_opt_runs,
-        sig_opt_project,
-        sig_opt_experiment_id,
-        **kwargs
+            cls,
+            sig_opt,
+            sig_opt_token,
+            sig_opt_runs,
+            sig_opt_project,
+            sig_opt_experiment_id,
+            **kwargs
     ) -> dict:
         """
         This function creates a new SigOpt experiment and optimizes the selected parameters.
@@ -260,6 +260,7 @@ class RunMe:
             logging.error(traceback.format_exc())
             logging.error('Execution finished with errors :(')
             # Experimental return value to be resilient in case of error while being in a SigOpt optimization
+            TBWriter().add_scalar(tag='test/accuracy', scalar_value=-1.0)
             return_value = {'train': -1.0, 'val': -1.0, 'test': -1.0}
         finally:
             # Free logging resources
@@ -475,7 +476,18 @@ class RunMe:
                 raise SystemExit
 
     @classmethod
-    def _set_up_logging(cls, parser, experiment_name, output_folder, quiet, args_dict, debug, wandb_project, **kwargs):
+    def _set_up_logging(
+            cls,
+            parser,
+            experiment_name,
+            output_folder,
+            quiet,
+            args_dict,
+            debug,
+            wandb_project,
+            wandb_sweep,
+            **kwargs
+    ):
         """
         Set up a logger for the experiment
 
@@ -497,6 +509,8 @@ class RunMe:
             Flag for debugging level
         wandb_project : str
             Token for using the WandDB tool
+        wandb_sweep : bool
+            Flag for using wandb sweeps
 
         Returns
         -------
@@ -529,9 +543,9 @@ class RunMe:
             if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                        kwargs[action.dest] != action.default) \
-                        and action.dest != 'load_model' \
-                        and action.dest != 'input_image':
+                            kwargs[action.dest] != action.default) \
+                            and action.dest != 'load_model' \
+                            and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))
 
         # Build up final logging folder tree with the non-default training parameters
@@ -582,7 +596,7 @@ class RunMe:
         environment_yml = os.path.join(log_folder, 'environment.yml')
         subprocess.call('conda env export > {}'.format(environment_yml), shell=True)
 
-        if wandb_project is not None:
+        if wandb_project is not None and not wandb_sweep:
             import wandb
             wandb.init(project=wandb_project, name=experiment_name, config=args_dict, reinit=True)
 
