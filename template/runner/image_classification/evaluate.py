@@ -1,4 +1,6 @@
 # DeepDIVA
+import logging
+import traceback
 import warnings
 
 import numpy as np
@@ -60,14 +62,23 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
             Label for logging purposes. Typically 'train', 'test' or 'valid'.
             It's prepended to the logging output path and messages.
         """
-        # Make and log to TB the confusion matrix
-        cm = MetricLogger()['confusion_matrix'].make_heatmap(data_loader.dataset.classes)
-        TBWriter().save_image(tag=logging_label + '/confusion_matrix', image=cm, global_step=epoch)
-
-        # Generate a classification report for each epoch
-        cr = MetricLogger()['confusion_matrix'].get_classification_report(data_loader.dataset.classes)
-        TBWriter().add_text(tag='Classification Report for epoch {}\n'.format(epoch),
-                            text_string='\n' + cr,
-                            global_step=epoch)
-        pass
-
+        # CURRENTLY DISABLED AS IT OCCUPIES A LOT OF SPACE ON DISK FOR NOTHING
+        # # Make and log to TB the confusion matrix
+        # try:
+        #     cm = MetricLogger()['confusion_matrix'].make_heatmap(data_loader.dataset.classes)
+        #     TBWriter().save_image(
+        #         tag=logging_label + '/confusion_matrix', image=cm, global_step=epoch
+        #     )
+        # except Exception as exp:
+        #     logging.error('Creation of the confusion matrix failed: %s' % repr(exp))
+        #
+        #     # Generate a classification report for each epoch
+        # try:
+        #     cr = MetricLogger()['confusion_matrix'].get_classification_report(data_loader.dataset.classes)
+        #     TBWriter().add_text(
+        #         tag='Classification Report for epoch {}\n'.format(epoch),
+        #         text_string='\n' + cr,
+        #         global_step=epoch
+        #     )
+        # except Exception as exp:
+        #     logging.error('Creation of the classification report failed: %s' % repr(exp))
