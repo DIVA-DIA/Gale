@@ -90,7 +90,7 @@ class CLArguments(BaseCLArguments):
                                  help="Flag for normalizing conv weights")
         parser_init.add_argument("--conv-standardize",
                                  type=int,
-                                 default=0, # Supposedly 1 is best
+                                 default=0,
                                  help="Flag for standardizing conv weights")
         parser_init.add_argument("--conv-scale",
                                  type=int,
@@ -99,15 +99,15 @@ class CLArguments(BaseCLArguments):
 
         parser_init.add_argument("--lin-normalize",
                                  type=int,
-                                 default=1, # Supposedly 1 is best
+                                 default=0,
                                  help="Flag for normalizing linear weights")
         parser_init.add_argument("--lin-standardize",
                                  type=int,
-                                 default=0, # Supposedly 1 is best
+                                 default=0,
                                  help="Flag for standardizing linear weights")
         parser_init.add_argument("--lin-scale",
                                  type=int,
-                                 default=0, # Supposedly 1 is best
+                                 default=0,
                                  help="Flag for normalizing linear weights")
 
         parser_init.add_argument('--trim-lda-iterations',
