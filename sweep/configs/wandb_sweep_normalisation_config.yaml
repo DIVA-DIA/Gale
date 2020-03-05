@@ -1,0 +1,59 @@
+program: template/RunMe.py
+command:
+  - python
+  - ${program}
+  - "--wandb-sweep"
+  - "--wandb-project"
+  - "normalisation_sweep"
+  - "-rc"
+  - "ImageClassification"
+  - "--nesterov"
+  - "--ignoregit"
+  - "--disable-dataset-integrity"
+  - "--output-folder"
+  - "/HOME/albertim/log"
+  - "--input-folder"
+  - "/HOME/albertim/dataset/CINIC10"
+  - "--model-name"
+  - "InitBaseline"
+  - "--epochs"
+  - "100"
+  - "--seed"
+  - "42"
+  - "-j"
+  - "16"
+  - "--init"
+  - "--init-function"
+  - "pure_lda"
+  - "--experiment-name"
+  - "sweep"
+  - "--lr"
+  - "0.012"
+  - "--weight-decay"
+  - "0.003"
+  - "--num-samples"
+  - "90000"
+  - "--max-patches"
+  - "10"
+  - "--validation-interval"
+  - "25"
+method: grid
+metric:
+  name: test/accuracy
+  goal: maximize
+parameters:
+  solver:
+    values: ['svd', 'eigen']
+  conv_normalize:
+    values: [0, 1]
+  conv_standardize:
+    values: [0, 1]
+  conv_scale:
+    values: [0, 1]
+  lin_normalize:
+    values: [0, 1]
+  lin_standardize:
+    values: [0, 1]
+  lin_scale:
+    values: [0, 1]
+
