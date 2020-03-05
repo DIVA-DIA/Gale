@@ -18,7 +18,7 @@ class Flatten(nn.Module):
 class BabyResNet(nn.Module):
     r"""
     ResNet model architecture adapted from `<https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py>`
-    It is better suited for smaller images as the expected input size is TODO
+    It is better suited for smaller images as the expected input size is 32x32
 
     Attributes
     ----------
@@ -89,7 +89,7 @@ class BabyResNet(nn.Module):
         self.features = None
         self.num_input_filters = 128  # Attention: this gets updated after each convx layer creation!
 
-        # First convolutional layer, bring the input into the 56x56x64 desired size
+        # First convolutional layer, bring the input into the 28x28x128 desired size
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, self.num_input_filters, kernel_size=3, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(self.num_input_filters),
