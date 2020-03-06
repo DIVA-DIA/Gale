@@ -82,7 +82,7 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
             if module.weight.data.shape != W.shape:
                 logging.error(f"Weight matrix dimension mis-match. Expected {module.weight.data.shape} got {W.shape}")
                 sys.exit(-1)
-            if module.bias.data.shape != B.shape:
+            if module.bias is not None and module.bias.data.shape != B.shape:
                 logging.error(f"Bias matrix dimension mis-match. Expected {module.bias.data.shape} got {B.shape}")
                 sys.exit(-1)
 
@@ -90,7 +90,8 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
             logging.info('Assign parameters')
             W, B = BaseRoutine().move_to_device(W, B, **kwargs)
             module.weight.data.copy_(W)
-            module.bias.data.copy_(B)
+            if module.bias is not None:
+                module.bias.data.copy_(B)
 
         #######################################################################
         # Forward pass of this layer

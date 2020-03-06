@@ -35,28 +35,6 @@ def _normalize_weights(w, b):
     return w, b
 
 
-def _scale_weights(w, b):
-    """
-    Given both matrices of bias and weights this function return them scaled such that the
-    standard deviation is scaled accordging to Kaiming He observation, which works best with ReLU
-    See more: https://towardsdatascience.com/weight-initialization-in-neural-networks-a-journey-from-the-basics-to-kaiming-954fb9b47c79
-
-    Parameters
-    ----------
-    w: ndarray 2D
-        Weight matrix
-    b : ndarray 1D
-        Bias matrix
-
-    Returns
-    -------
-        B and W normalized between [-1, 1]
-    """
-    w = w * math.sqrt(2 / w.shape[0])
-    b = b * math.sqrt(2 / w.shape[0])
-    return w, b
-
-
 def _standardize_weights(w, b):
     """
     Given both matrices of bias and weights this function return them standardized with 0 mean
@@ -81,6 +59,28 @@ def _standardize_weights(w, b):
     std = np.std(joint_matrices)
     w = (w - mean) / std
     b = (b - mean) / std
+    return w, b
+
+
+def _scale_weights(w, b):
+    """
+    Given both matrices of bias and weights this function return them scaled such that the
+    standard deviation is scaled accordging to Kaiming He observation, which works best with ReLU
+    See more: https://towardsdatascience.com/weight-initialization-in-neural-networks-a-journey-from-the-basics-to-kaiming-954fb9b47c79
+
+    Parameters
+    ----------
+    w: ndarray 2D
+        Weight matrix
+    b : ndarray 1D
+        Bias matrix
+
+    Returns
+    -------
+        B and W standardized
+    """
+    w = w * math.sqrt(2 / w.shape[0])
+    b = b * math.sqrt(2 / w.shape[0])
     return w, b
 
 
@@ -222,9 +222,11 @@ def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
     # Correct the sizes of W according to the expected size of the module
     w = _fit_weights_size(w, module)
 
+
     # Set B to be -W*mean(X) such that it centers the data. At this point in B there are the means of the data
     b = -np.matmul(w.T, b)
-    assert b.shape == module.bias.shape
+    if module.bias is not None:  # Conv layers might have no bias
+        assert b.shape == module.bias.shape
 
     # Reshape W to match the expected shape of the module
     w = _reshape_flattened_conv_filters(w, module.kernel_size[0])
@@ -485,6 +487,8 @@ def pure_lda(
         logging.info('Pure LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
         # Adapt the size of the weights
+        # B = np.zeros_like(B)
+
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
@@ -657,7 +661,6 @@ def highlander_lda(
         # Init W and B with the default values
         # -> If number of neuron is not a multiple of classes we leave random values in those columns
         W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
-        B = module.bias.data.cpu().numpy()
         classes = np.unique(init_labels)
 
         # |C| times
@@ -935,11 +938,7 @@ def reverse_pca(
         for i, l in enumerate(classes):
             logging.info('Iteration of class {}'.format(l))
             # Select only the samples corresponding to a specific class
-            # p, c = pca.transform(init_input[np.where(init_labels == l)])
-            from sklearn.decomposition import PCA
-            pca = PCA().fit(init_input[np.where(init_labels == l)])
-            p = pca.components_.T  # Don't even think about touching this T!
-            c = pca.mean_
+            p, c = pca.transform(init_input[np.where(init_labels == l)])
 
             start_index = i * available_columns
             end_index = start_index + available_columns
@@ -948,7 +947,6 @@ def reverse_pca(
             start_index = i * bias_available_columns
             end_index = start_index + bias_available_columns
             B[start_index:end_index] = c[-bias_available_columns:]
-
 
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
@@ -1022,6 +1020,15 @@ def relda(
         Weight matrix
     b : torch.Tensor
         Bias array
+
+    Notes
+    -----
+
+    CINIC10 , InitBaseline:
+
+        SOLVER=EIGEN always fails!
+
+
     """
     network_depth = len(list(list(model.children())[0].children()))
     init_input, init_labels = _filter_points_trimlda(
