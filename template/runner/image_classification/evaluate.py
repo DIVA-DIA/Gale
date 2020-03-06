@@ -49,7 +49,7 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
         MetricLogger().update(key='confusion_matrix', p=np.argmax(output.data.cpu().numpy(), axis=1), t=target.cpu().numpy())
 
     @classmethod
-    def end_of_the_epoch(cls, data_loader, epoch, logging_label, **kwargs):
+    def end_of_the_epoch(cls, data_loader, epoch, logging_label, multi_run_label, current_log_folder, **kwargs):
         """See parent method for documentation
 
         Extra-Parameters
@@ -82,3 +82,27 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
         #     )
         # except Exception as exp:
         #     logging.error('Creation of the classification report failed: %s' % repr(exp))
+
+        # Make and log to TB the confusion matrix
+        cm = MetricLogger()['confusion_matrix'].make_heatmap(data_loader.dataset.classes)
+        TBWriter().save_image(tag=logging_label + '/confusion_matrix'+multi_run_label, image=cm, global_step=epoch)
+
+        # Generate a classification report for each epoch
+        cr = MetricLogger()['confusion_matrix'].get_classification_report(data_loader.dataset.classes)
+        multi_tag = ''
+        if len(multi_run_label) > 0:
+            multi_tag = ' and run {}'.format(multi_run_label)
+        TBWriter().add_text(tag='Classification Report for epoch {}{}\n'.format(epoch, multi_tag),
+                            text_string='\n' + cr,
+                            global_step=epoch)
+
+        # only during testing
+        if current_log_folder:
+            multi_tag = ''
+            if len(multi_run_label) > 0:
+                multi_tag = ' run{}'.format(multi_run_label)
+            # save the clasification output as a csv
+            MetricLogger()['classification_results{}'.format(multi_run_label)].save_csv(output_folder=current_log_folder, multi_run_label=multi_run_label)
+            report = MetricLogger()['classification_results{}'.format(multi_run_label)].get_report()
+            TBWriter().add_text(tag='Classification per test file {}\n'.format(multi_tag),
+                            text_string='\n' + report)
