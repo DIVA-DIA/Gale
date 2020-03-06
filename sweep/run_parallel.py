@@ -8,8 +8,8 @@ from sigopt import Connection
 from pathlib import Path
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-#SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-SIGOPT_FILE = "sweep/sigopt_sweep_config.json"
+# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+SIGOPT_FILE = "sweep/configs/sigopt_sweep_standard_config.json"
 SIGOPT_PROJECT = "init"
 
 # Init System Parameters #################################################
@@ -21,23 +21,25 @@ SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "normalize"
-EPOCHS = 100 # For CB55 is /10
-RUNS_PER_INSTANCE = 150 # 150 # 10+ * num of parameters to optimize usually
+EXPERIMENT_NAME_PREFIX = "InitBaselineVGGLike"
+EPOCHS = 50 # For CB55 is /10
+RUNS_PER_INSTANCE = 100 # 150 # 10+ * num of parameters to optimize usually
 RUNS_PER_VARIANCE = 20
-PROCESSES_PER_GPU = 1
+PROCESSES_PER_GPU = 2
 
 ##########################################################################
 
 MODELS = [
-    "LDA_Simple",
-    # "InitBaseline"
+    # "LDA_Simple",
+    # "InitBaseline",
+    "InitBaselineVGGLike",
 ]
 
 DATASETS = [
     # SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55",
-    SERVER_PREFIX + "/dataset/HAM10000",
+    # SERVER_PREFIX + "/dataset/HAM10000",
     # SERVER_PREFIX + "/dataset/CIFAR10",
+    SERVER_PREFIX + "/dataset/CINIC10",
     # SERVER_PREFIX + "/dataset/ColorectalHist",
     # SERVER_PREFIX + "/dataset/Flowers",
     # SERVER_PREFIX + "/dataset/ImageNet",
@@ -47,12 +49,12 @@ DATASETS = [
 INIT = [
     ("random", None),
     ("pure_lda", None),
-    #("mirror_lda", None),
-    #("highlander_lda", None),
+    ("mirror_lda", None),
+    ("highlander_lda", None),
     ("pure_pca", None),
-    #("lpca", None),
-    #("reverse_pca", None),
-    # ("relda", None),
+    ("lpca", None),
+    ("reverse_pca", None),
+    ("relda", None),
 ]
 
 ##########################################################################
@@ -146,22 +148,24 @@ class ExperimentsBuilder(object):
                     best_parameters = ExperimentsBuilder._get_best_parameters(
                         conn, sigopt_list, [model, dataset, init]
                     )
-                    experiments.append(Experiment(
-                        experiment_name_prefix=f"multi_" + EXPERIMENT_NAME_PREFIX,
-                        model_name=model,
-                        output_folder=OUTPUT_FOLDER,
-                        input_folder=dataset,
-                        epochs=EPOCHS,
-                        init=init,
-                        additional=(
-                            f"--wandb-project sigopt_variance_{Path(dataset).stem} "
-                            f"-j {ExperimentsBuilder.num_workers():d} "
-                            f"--multi-run {RUNS_PER_VARIANCE:d} "
-                            # TODO add all param
-                            f"--lr {best_parameters['lr']:f} "
-                            f"--weight-decay {best_parameters['weight_decay']:f} "
-                        )
-                    ))
+                    for i in range(RUNS_PER_VARIANCE):
+                        experiments.append(Experiment(
+                            experiment_name_prefix=f"multi_" + EXPERIMENT_NAME_PREFIX,
+                            model_name=model,
+                            output_folder=OUTPUT_FOLDER,
+                            input_folder=dataset,
+                            epochs=EPOCHS,
+                            init=init,
+                            additional=(
+                                f"--wandb-project sigopt_variance_{Path(dataset).stem} "
+                                f"-j {ExperimentsBuilder.num_workers():d} "                                                         
+                                f"--solver {best_parameters['solver']:s} "
+                                f"--weight-decay {best_parameters['weight_decay']:f} "
+                                f"--lr {best_parameters['lr']:f} "
+                                f"--num-samples {best_parameters['num_samples']:d} "
+                                f"--trim-lda-iterations {best_parameters['trim_lda_iterations']:d} "
+                            )
+                        ))
         return experiments
 
     @staticmethod
