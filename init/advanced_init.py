@@ -222,7 +222,6 @@ def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
     # Correct the sizes of W according to the expected size of the module
     w = _fit_weights_size(w, module)
 
-
     # Set B to be -W*mean(X) such that it centers the data. At this point in B there are the means of the data
     b = -np.matmul(w.T, b)
     if module.bias is not None:  # Conv layers might have no bias
@@ -230,9 +229,6 @@ def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
 
     # Reshape W to match the expected shape of the module
     w = _reshape_flattened_conv_filters(w, module.kernel_size[0])
-    # LINEAR LAYER
-    # if type(module) is nn.Linear:
-    #     w = w.T  # Linear Layers have neurons x input_dimensions
     assert w.shape == module.weight.shape
 
     # Set W by adding it to the current random values
@@ -643,21 +639,21 @@ def highlander_lda(
     # All layers but the last one
     if layer_index < network_depth:
         logging.info('Highlander LDA Transform')
+        classes = np.unique(init_labels)
 
         # Check if size of model allows (has enough neurons)
-        if module.weight.shape[0] < len(np.unique(init_labels)) * 2:
+        if module.weight.shape[0] < len(classes) * 2:
             logging.error(
                 f"Model does not have enough neurons. Expected at least |C|*2 got {module.weight.shape[0]}"
             )
             sys.exit(-1)
 
         # Compute available columns per class. We need 2 minimum but we can use more
-        available_columns_per_class = int(module.weight.shape[0] / len(np.unique(init_labels)))
+        available_columns_per_class = int(module.weight.shape[0] / len(classes))
 
-        # Init W and B with the default values
+        # Init W with the default values
         # -> If number of neuron is not a multiple of classes we leave random values in those columns
-        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
-        classes = np.unique(init_labels)
+        W = _flatten_conv_filters(module.weight.data.cpu().numpy())
 
         # |C| times
         for i, l in enumerate(classes):
@@ -671,7 +667,7 @@ def highlander_lda(
             w, b = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
             start_index = i * available_columns_per_class
-            end_index = start_index + available_columns_per_class
+            end_index = start_index + np.min([available_columns_per_class, w.shape[1]])
             W[:, start_index:end_index] = w[:, 0:available_columns_per_class]
             # Mean of the data is always the same regardless of the labels arrangement
             B = b
@@ -743,7 +739,6 @@ def pure_pca(
     if layer_index < network_depth:
         logging.info('PCA Transform')
         W, B = pca.transform(init_input)
-
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
@@ -831,12 +826,15 @@ def lpca(
                 f"Not all columns will be initialized as the shape {module.weight.shape[0]} is not divisible by 2"
             )
 
-        # Init W with zeros of same shape of real weight matrix
-        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
-        # Add LDA columns in the first half
-        W[:, 0:half_available_columns] = w[:, 0:half_available_columns]
-        # Add PCA columns in the second half
-        W[:, half_available_columns:2*half_available_columns] = p[:, 0:half_available_columns]
+        # Init W with the default values
+        W = _flatten_conv_filters(module.weight.data.cpu().numpy())
+        # Add LDA columns in the first part
+        # In case of eigen solver each part will be half-half. Since svf svd solver only gives |C|-1 columns the pca
+        # part takes all - |C|-1 columns (the rest after the lda has been set basically)
+        end_index_first_part = np.min([half_available_columns, w.shape[1]])
+        W[:, 0:end_index_first_part] = w[:, 0:end_index_first_part]
+        # Add PCA columns in the second part
+        W[:, end_index_first_part:] = p[:, 0:W.shape[1]-end_index_first_part]
 
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
@@ -925,8 +923,8 @@ def reverse_pca(
         available_columns = int(module.weight.shape[0] / len(np.unique(init_labels)))
         bias_available_columns = int(init_input.shape[1] / len(np.unique(init_labels)))
 
-        # Init W and B with zeros
-        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
+        # Init W with the default values and B with zeros
+        W = _flatten_conv_filters(module.weight.data.cpu().numpy())
         B = np.zeros(init_input.shape[1])  # Bias should be size of input because its later multiplied by -Wx
         classes = np.unique(init_labels)
 
@@ -947,7 +945,6 @@ def reverse_pca(
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
-
 
     ##################################################################
     # Last layer
@@ -1044,8 +1041,8 @@ def relda(
             )
             sys.exit(-1)
 
-        # Init W and B with zeros
-        W = np.zeros(_flatten_conv_filters(module.weight.data.cpu().numpy()).shape)
+        # Init W with the default values and B with zeros
+        W = _flatten_conv_filters(module.weight.data.cpu().numpy())
         B = np.zeros(init_input.shape[1])  # Bias should be size of input because its later multiplied by -Wx
 
         # Compute available columns per class
