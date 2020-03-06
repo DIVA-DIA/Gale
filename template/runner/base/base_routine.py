@@ -108,7 +108,7 @@ class BaseRoutine:
             if isinstance(meter, ScalarValue):
                 TBWriter().add_scalar(tag=logging_label + '/' + tag, scalar_value=meter.global_avg, global_step=epoch)
 
-        if cls.main_metric() in MetricLogger():
+        if cls.main_metric() + multi_run_label in MetricLogger():
             return MetricLogger()[cls.main_metric()].global_avg
         else:
             return 0
