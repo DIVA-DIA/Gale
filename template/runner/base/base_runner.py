@@ -134,10 +134,10 @@ class BaseRunner(AbstractRunner):
         batch_lr_schedulers.append(self.setup.warmup_lr_scheduler(optimizer=optimizer,
                                                                   warmup_factor=1. / 1000000,
                                                                   warmup_iters=len(train_loader) - 1))
-        epoch_lr_schedulers = [self.setup.get_lrscheduler(
-            optimizer=optimizer, lrscheduler_name=name, verbose=True, **kwargs
-        )
-                               for name in epoch_lrscheduler_name]
+        epoch_lr_schedulers = [
+            self.setup.get_lrscheduler(optimizer=optimizer, lrscheduler_name=name, verbose=True, patience=20, **kwargs)
+            for name in epoch_lrscheduler_name
+        ]
 
         # Resume from checkpoint if necessary
         if resume:
