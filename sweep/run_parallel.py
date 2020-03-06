@@ -111,7 +111,7 @@ class ExperimentsBuilder(object):
             for model in MODELS:
                 for (init, experiment_id) in INIT:
                     additional = (
-                        f"--wandb-project sigopt_{Path(dataset).stem}_{init} "
+                        f"--wandb-project sigopt_{Path(dataset).stem} "
                         f"-j {ExperimentsBuilder.num_workers():d} "
                         f"--sig-opt-token {SIGOPT_TOKEN:s} "
                         f"--sig-opt-runs {str(RUNS_PER_INSTANCE):s} "
