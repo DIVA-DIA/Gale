@@ -16,12 +16,12 @@ SIGOPT_PROJECT = "init"
 NUM_GPUs = range(torch.cuda.device_count())
 #NUM_GPUs = [3, 4, 5, 6, 7]
 CPU_CORES = mp.cpu_count()
-SERVER = 'dana'
+SERVER = 'lucy'
 SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "init_v1"
+EXPERIMENT_NAME_PREFIX = "normalize"
 EPOCHS = 100 # For CB55 is /10
 RUNS_PER_INSTANCE = 150 # 150 # 10+ * num of parameters to optimize usually
 RUNS_PER_VARIANCE = 20
