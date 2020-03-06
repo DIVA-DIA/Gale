@@ -115,6 +115,7 @@ class RunMe:
             sig_opt_runs,
             sig_opt_project,
             sig_opt_experiment_id,
+            multi_run,
             **kwargs
     ) -> dict:
         """
@@ -135,6 +136,8 @@ class RunMe:
             SigOpt project name
         sig_opt_experiment_id : int
             SigOpt experiment ID for resuming
+        multi_run : int
+            If not None, indicates how many multiple runs needs to be done
 
         Returns
         -------
@@ -175,14 +178,19 @@ class RunMe:
                     kwargs[key.replace("-", "_")] = params[key]
 
                 # Run
-                return_value = cls._execute(**kwargs)
-                score = np.max(return_value['val'])
+                return_value = cls._execute(multi_run=multi_run, **kwargs)
 
-                # In case of multi-run the return type will be a list (otherwise is a single float)
-                if type(score) == float:
-                    score = [score]
-                for item in score:
-                    conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, value=item)
+                if multi_run is None:
+                    score = float(np.max(return_value['val']))
+                    if type(score) == float:
+                        score = [score]
+                    for s in score:
+                        conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, value=s)
+                else:
+                    # In case of multi-run the return type will be a list (otherwise is a single float)
+                    logging.error(f"Multi-run with sigopt currently not implemented")
+                    # TODO: fetch the array of vals properly from return_value i.e. argmax for each row
+                    sys.exit(-1)
         return {}
 
     ####################################################################################################################
