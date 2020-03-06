@@ -162,7 +162,7 @@ class RunMe:
                     project=sig_opt_project,
                 )
 
-            logging.info("Created experiment: https://sigopt.com/experiment/" + experiment.id)
+            print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
             for i in range(sig_opt_runs):
                 # Get suggestion from SigOpt
                 suggestion = conn.experiments(experiment.id).suggestions().create()
@@ -176,7 +176,7 @@ class RunMe:
 
                 # Run
                 return_value = cls._execute(**kwargs)
-                score = return_value['test']
+                score = np.max(return_value['val'])
 
                 # In case of multi-run the return type will be a list (otherwise is a single float)
                 if type(score) == float:
