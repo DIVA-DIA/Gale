@@ -47,7 +47,8 @@ class CLArguments(BaseCLArguments):
                                       default=None,
                                       type=float,
                                       nargs='+',
-                                      help="Specify the brightness, contrast, saturation and hue of the color-jitter transform. Use as --color-jitter float float float float", )
+                                      help="Specify the brightness, contrast, saturation and hue of the color-jitter transform. "
+                                           "Use as --color-jitter float float float float", )
         parser_transform.add_argument("--rotation",
                                       default=0,
                                       type=float,
