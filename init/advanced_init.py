@@ -373,23 +373,20 @@ def random(
     """
     network_depth = len(list(list(model.children())[0].children()))
 
+    # Init W and B with the default values
+    W = module.weight.data.cpu().numpy()
+    B = module.bias.data.cpu().numpy() if module.bias is not None else np.zeros(module.weight.shape[0])
+
     ##################################################################
     # All layers but the last one
     if layer_index < network_depth:
-        # Init W and B with the default values
-        W = module.weight.data.cpu().numpy()
-        B = module.bias.data.cpu().numpy()
         # Adapt the size of the weights
         W, B = _adapt_magnitude(
             w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale
         )
-
     ##################################################################
     # Last layer
     else:
-        # Init W and B with the default values
-        W = module.weight.data.cpu().numpy()
-        B = module.bias.data.cpu().numpy()
         # Adapt the size of the weights
         W, B = _adapt_magnitude(
             w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale
@@ -488,7 +485,6 @@ def pure_lda(
         W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
         # Adapt the size of the weights
         # B = np.zeros_like(B)
-
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
