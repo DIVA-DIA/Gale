@@ -49,7 +49,7 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
         MetricLogger().update(key='confusion_matrix', p=np.argmax(output.data.cpu().numpy(), axis=1), t=target.cpu().numpy())
 
     @classmethod
-    def end_of_the_epoch(cls, data_loader, epoch, logging_label, multi_run_label, current_log_folder, **kwargs):
+    def end_of_the_epoch(cls, data_loader, epoch, logging_label, multi_run_label, **kwargs):
         """See parent method for documentation
 
         Extra-Parameters
