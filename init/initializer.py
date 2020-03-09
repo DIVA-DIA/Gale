@@ -10,7 +10,7 @@ import sys
 from itertools import count
 
 import numpy as np
-import torch
+import psutil
 from sklearn.feature_extraction.image import extract_patches_2d
 from torch import nn
 
@@ -44,7 +44,12 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
     ###############################################################################################
     # Iterate over all layers
     logging.info('Iterate over all layers')
+    memory = psutil.virtual_memory().used
     for index, layer in enumerate(list(list(model.children())[0].children()), start=1):
+
+        if psutil.virtual_memory().used > memory:
+            logging.info(f"[MEMORY] Higher memory usage: {psutil.virtual_memory().used:,}")
+            memory = psutil.virtual_memory().used
 
         # Get module from layer
         module = get_module_from_sequential_layer(layer)
