@@ -115,6 +115,7 @@ class RunMe:
             sig_opt_runs,
             sig_opt_project,
             sig_opt_experiment_id,
+            sig_opt_parallel_bandwidth,
             multi_run,
             **kwargs
     ) -> dict:
@@ -136,6 +137,8 @@ class RunMe:
             SigOpt project name
         sig_opt_experiment_id : int
             SigOpt experiment ID for resuming
+        sig_opt_parallel_bandwidth : int
+            Number of concurrent parallel optimization running
         multi_run : int
             If not None, indicates how many multiple runs needs to be done
 
@@ -156,7 +159,7 @@ class RunMe:
             conn = Connection(client_token=sig_opt_token)
             if sig_opt_experiment_id is not None:
                 experiment = conn.experiments(sig_opt_experiment_id).fetch()
-                conn.experiments(experiment.id).suggestions().delete(state="open")
+                # conn.experiments(experiment.id).suggestions().delete(state="open")
                 print(f"Fetched experiment: https://sigopt.com/experiment/{experiment.id}")
             else:
                 experiment = conn.experiments().create(
@@ -164,6 +167,7 @@ class RunMe:
                     parameters=parameters,
                     observation_budget=sig_opt_runs,
                     project=sig_opt_project,
+                    parallel_bandwidth=sig_opt_parallel_bandwidth,
                 )
                 print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
 

@@ -121,6 +121,10 @@ class BaseCLArguments:
         parser_sigopt.add_argument('--sig-opt-experiment-id',
                                    type=int,
                                    help='place your SigOpt experiment id here to resume.')
+        parser_sigopt.add_argument('--sig-opt-parallel-bandwidth',
+                                   type=int,
+                                   help='number of concurrent parallel optimization running.')
+
 
     def _darwin_options(self):
         """ SigOpt options"""
