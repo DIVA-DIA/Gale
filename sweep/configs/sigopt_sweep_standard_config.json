@@ -10,19 +10,19 @@
   {
     "name": "weight-decay",
     "type": "double",
-    "precision": 4,
-    "bounds": {"max": 0.01, "min": 0.0}
+    "precision": 5,
+    "bounds": {"max": 0.002, "min": 0.0}
   },
   {
     "name": "lr",
     "type": "double",
     "precision": 4,
-    "bounds": {"max": 0.05, "min": 0.0005}
+    "bounds": {"max": 0.1, "min": 0.001}
   },
   {
     "name": "num-samples",
     "type": "int",
-    "bounds": {"max": 270000, "min": 100}
+    "bounds": {"max": 90000, "min": 100}
   },
   {
     "name": "trim-lda-iterations",
