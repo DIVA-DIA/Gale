@@ -157,6 +157,7 @@ class RunMe:
             if sig_opt_experiment_id is not None:
                 experiment = conn.experiments(sig_opt_experiment_id).fetch()
                 conn.experiments(experiment.id).suggestions().delete(state="open")
+                print(f"Fetched experiment: https://sigopt.com/experiment/{experiment.id}")
             else:
                 experiment = conn.experiments().create(
                     name=kwargs['experiment_name'],
@@ -164,9 +165,14 @@ class RunMe:
                     observation_budget=sig_opt_runs,
                     project=sig_opt_project,
                 )
+                print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
 
-            print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
             for i in range(sig_opt_runs):
+                if experiment.progress.observation_budget_consumed >= experiment.observation_budget:
+                    print(f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
+                          f"{experiment.observation_budget}. Finished here :)")
+                    return experiment.progress.best_observation
+
                 # Get suggestion from SigOpt
                 suggestion = conn.experiments(experiment.id).suggestions().create()
                 params = suggestion.assignments
