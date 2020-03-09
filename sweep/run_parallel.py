@@ -1,7 +1,10 @@
 import multiprocessing as mp
 import os
 import sys
+import time
 from multiprocessing import Process, Queue
+from random import randint
+
 import numpy as np
 import torch
 from sigopt import Connection
@@ -9,8 +12,9 @@ from pathlib import Path
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-SIGOPT_FILE = "sweep/configs/sigopt_sweep_standard_config.json"
+SIGOPT_FILE = "sweep/configs/sigopt_sweep_normalisation_config.json"
 SIGOPT_PROJECT = "init"
+SIGOPT_PARALLEL_BANDWIDTH = 16
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
@@ -21,11 +25,12 @@ SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "InitBaselineVGGLike"
-EPOCHS = 50 # For CB55 is /10
-RUNS_PER_INSTANCE = 100 # 150 # 10+ * num of parameters to optimize usually
+EXPERIMENT_NAME_PREFIX = "normalisation_contest"
+EPOCHS = 30 # For CB55 is /10
+RUNS_PER_INSTANCE = 300 # 150 # 10+ * num of parameters to optimize usually
 RUNS_PER_VARIANCE = 20
 PROCESSES_PER_GPU = 2
+
 
 ##########################################################################
 
@@ -47,14 +52,14 @@ DATASETS = [
 ]
 
 INIT = [
-    ("random", None),
-    ("pure_lda", None),
-    ("mirror_lda", None),
-    ("highlander_lda", None),
-    ("pure_pca", None),
-    ("lpca", None),
-    ("reverse_pca", None),
-    ("relda", None),
+    # ("random", 166672),
+    ("pure_lda", 167353),
+    # ("mirror_lda", 166673),
+    # ("highlander_lda", 166667),
+    # ("pure_pca", 166670),
+    # ("lpca", 166671),
+    # ("reverse_pca", None),
+    # ("relda", 166669),
 ]
 
 ##########################################################################
@@ -109,26 +114,31 @@ class ExperimentsBuilder(object):
         experiments = []
         for dataset in DATASETS:
             for model in MODELS:
-                for (init, experiment_id) in INIT:
-                    additional = (
-                        f"--wandb-project sigopt_{Path(dataset).stem} "
-                        f"-j {ExperimentsBuilder.num_workers():d} "
-                        f"--sig-opt-token {SIGOPT_TOKEN:s} "
-                        f"--sig-opt-runs {str(RUNS_PER_INSTANCE):s} "
-                        f"--sig-opt-project {SIGOPT_PROJECT:s} "
-                        f"--sig-opt {SIGOPT_FILE} "
-                    )
-                    if experiment_id is not None:
-                        additional += f"--sig-opt-experiment-id {experiment_id} "
-                    experiments.append(Experiment(
-                        experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
-                        model_name=model,
-                        output_folder=OUTPUT_FOLDER,
-                        input_folder=dataset,
-                        epochs=EPOCHS,
-                        init=init,
-                        additional = additional
-                    ))
+                for _ in range(SIGOPT_PARALLEL_BANDWIDTH):
+                    for (init, experiment_id) in INIT:
+                        additional = (
+                            f"--wandb-project sigopt_normalisation_{Path(dataset).stem} "
+                            f"-j {ExperimentsBuilder.num_workers():d} "
+                            f"--sig-opt-token {SIGOPT_TOKEN:s} "
+                            f"--sig-opt-runs {str(RUNS_PER_INSTANCE):s} "
+                            f"--sig-opt-project {SIGOPT_PROJECT:s} "
+                            f"--sig-opt {SIGOPT_FILE} "
+                            f"--sig-opt-parallel-bandwidth {SIGOPT_PARALLEL_BANDWIDTH} "
+                            f"--num-samples 90000 "
+                            f"--lr 0.012 "
+                            f"--validation-interval 2 "
+                        )
+                        if experiment_id is not None:
+                            additional += f"--sig-opt-experiment-id {experiment_id} "
+                        experiments.append(Experiment(
+                            experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
+                            model_name=model,
+                            output_folder=OUTPUT_FOLDER,
+                            input_folder=dataset,
+                            epochs=EPOCHS,
+                            init=init,
+                            additional = additional
+                        ))
         return experiments
 
     @staticmethod
@@ -172,7 +182,7 @@ class ExperimentsBuilder(object):
     def num_workers() -> int:
         # 'max_' here is meant as "running at the same time"
         max_allowed = len(NUM_GPUs) * PROCESSES_PER_GPU
-        max_needed = len(DATASETS) * len(MODELS) * len(INIT)
+        max_needed = len(DATASETS) * len(MODELS) * len(INIT) * SIGOPT_PARALLEL_BANDWIDTH
         return int(np.floor(CPU_CORES / np.min([max_allowed, max_needed])))
 
     @staticmethod
@@ -218,6 +228,9 @@ def run_experiments(number_gpus, processes_per_gpu, queue):
             process = ExperimentProcess(queue=queue, gpu_idx=gpu)
             process.start()
             processes.append(process)
+            if SIGOPT_PARALLEL_BANDWIDTH > 1:
+                # Avoid that all the processes starts together
+                time.sleep(300)
     for p in processes:
         p.join()
 
