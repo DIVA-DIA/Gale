@@ -55,7 +55,7 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
             memory = psutil.virtual_memory().used
             deadlock_counter = 0
             while psutil.virtual_memory().percent > 85:
-                logging.info(f"[MEMORY] Memory usage is abouve 85%({psutil.virtual_memory().percent}). Sleeping 10 min")
+                logging.info(f"[MEMORY] Memory usage is above 85%({psutil.virtual_memory().percent}). Sleeping 10 min")
                 deadlock_counter += 1
                 if deadlock_counter > 36:
                     logging.error(f"[MEMORY] It is 6h that the memory is above 85%. I quit!")
