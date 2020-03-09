@@ -7,8 +7,11 @@ has two functions) one should implement his own init function.
 # Utils
 import logging
 import sys
+import time
 from itertools import count
+from threading import Thread
 
+import gc
 import numpy as np
 import psutil
 from sklearn.feature_extraction.image import extract_patches_2d
@@ -50,6 +53,14 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
         if psutil.virtual_memory().used > memory:
             logging.info(f"[MEMORY] Higher memory usage: {psutil.virtual_memory().used:,}")
             memory = psutil.virtual_memory().used
+            deadlock_counter = 0
+            while psutil.virtual_memory().percent > 85:
+                logging.info(f"[MEMORY] Memory usage is abouve 85%({psutil.virtual_memory().percent}). Sleeping 10 min")
+                deadlock_counter += 1
+                if deadlock_counter > 36:
+                    logging.error(f"[MEMORY] It is 6h that the memory is above 85%. I quit!")
+                    sys.exit(-1)
+                time.sleep(600)
 
         # Get module from layer
         module = get_module_from_sequential_layer(layer)
@@ -108,6 +119,14 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
             X[i] = layer(X[i])
             # Bring data back to CPU for further computing data-driven inits
             X[i] = BaseRoutine().move_to_device(X[i], no_cuda=True)[0]
+
+    # Free some resources, just in case
+    del X
+    del y
+    del init_input
+    del init_labels
+    gc.collect()
+    pass
 
 
 def _collect_initial_data(data_loader, num_samples):
