@@ -274,6 +274,15 @@ class RunMe:
             else:
                 return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
             logging.info(f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}')
+        except MemoryError as error:
+            # Output expected MemoryErrors.
+            if quiet:
+                print('Unhandled memory error: {}'.format(repr(exp)))
+            logging.error('Unhandled error: %s' % repr(exp))
+            logging.error(traceback.format_exc())
+            # Experimental return value to be resilient in case of error while being in a SigOpt optimization
+            TBWriter().add_scalar(tag='test/accuracy', scalar_value=-2.0)
+            return_value = {'train': -2.0, 'val': -2.0, 'test': -2.0}
         except Exception as exp:
             if quiet:
                 print('Unhandled error: {}'.format(repr(exp)))
