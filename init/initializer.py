@@ -44,6 +44,11 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
     logging.info(f'Collect initial data #samples={num_samples}')
     X, y = _collect_initial_data(data_loader, num_samples)
 
+    if 'random' in init_function:
+        # Save time and space
+        num_samples = 1
+        max_patches = 1
+
     ###############################################################################################
     # Iterate over all layers
     logging.info('Iterate over all layers')
