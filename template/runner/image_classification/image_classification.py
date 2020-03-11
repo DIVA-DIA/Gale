@@ -21,7 +21,7 @@ class ImageClassification(BaseRunner):
         self.setup =  ImageClassificationSetup()
 
     ####################################################################################################################
-    def prepare(self, model_name, resume, batch_lrscheduler_name, epoch_lrscheduler_name, init=False, **kwargs) -> dict:
+    def prepare(self, init=False, **kwargs) -> dict:
         """See parent method for documentation
 
         Extra-Parameters
@@ -29,7 +29,7 @@ class ImageClassification(BaseRunner):
         init : bool
             Flag for use advanced init methods
         """
-        d = super().prepare(model_name, resume, batch_lrscheduler_name, epoch_lrscheduler_name, **kwargs)
+        d = super().prepare(**kwargs)
 
         # Init the model
         if init:
