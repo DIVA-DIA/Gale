@@ -109,15 +109,15 @@ class RunMe:
 
     @classmethod
     def _run_sig_opt(
-            cls,
-            sig_opt,
-            sig_opt_token,
-            sig_opt_runs,
-            sig_opt_project,
-            sig_opt_experiment_id,
-            sig_opt_parallel_bandwidth,
-            multi_run,
-            **kwargs
+        cls,
+        sig_opt,
+        sig_opt_token,
+        sig_opt_runs,
+        sig_opt_project,
+        sig_opt_experiment_id,
+        sig_opt_parallel_bandwidth,
+        multi_run,
+        **kwargs
     ) -> dict:
         """
         This function creates a new SigOpt experiment and optimizes the selected parameters.
@@ -147,21 +147,16 @@ class RunMe:
         {} : dict
             At the moment it is not necessary to return meaningful values from here
         """
-        # Load parameters from file
-        with open(sig_opt, 'r') as f:
-            parameters = json.loads(f.read())
-
         # Put your SigOpt token here.
         if sig_opt_token is None:
             logging.error('Enter your SigOpt API token using --sig-opt-token')
             raise SystemExit
         else:
             conn = Connection(client_token=sig_opt_token)
-            if sig_opt_experiment_id is not None:
-                experiment = conn.experiments(sig_opt_experiment_id).fetch()
-                # conn.experiments(experiment.id).suggestions().delete(state="open")
-                print(f"Fetched experiment: https://sigopt.com/experiment/{experiment.id}")
-            else:
+            if sig_opt_experiment_id is None:
+                # Load parameters from file
+                with open(sig_opt, 'r') as f:
+                    parameters = json.loads(f.read())
                 experiment = conn.experiments().create(
                     name=kwargs['experiment_name'],
                     parameters=parameters,
@@ -169,15 +164,21 @@ class RunMe:
                     project=sig_opt_project,
                     parallel_bandwidth=sig_opt_parallel_bandwidth,
                 )
-                print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
-
+                sig_opt_experiment_id = experiment.id
+                print(f"Created experiment: https://sigopt.com/experiment/{sig_opt_experiment_id}")
+            experiment = conn.experiments(sig_opt_experiment_id).fetch()
+            # conn.experiments(experiment.id).suggestions().delete(state="open")
+            print(f"Fetched experiment: https://sigopt.com/experiment/{experiment.id}")
+            # Running as many runs as necessary, stopping early is max budget is reached
             for i in range(sig_opt_runs):
                 # Refresh experiment object
                 experiment = conn.experiments(experiment.id).fetch()
                 # Check if budget has been met
                 if experiment.progress.observation_budget_consumed >= experiment.observation_budget:
-                    print(f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
-                          f"{experiment.observation_budget}. Finished here :)")
+                    print(
+                        f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
+                        f"{experiment.observation_budget}. Finished here :)"
+                    )
                     return experiment.progress.best_observation
 
                 # Get suggestion from SigOpt
@@ -516,16 +517,16 @@ class RunMe:
 
     @classmethod
     def _set_up_logging(
-            cls,
-            parser,
-            experiment_name,
-            output_folder,
-            quiet,
-            args_dict,
-            debug,
-            wandb_project,
-            wandb_sweep,
-            **kwargs
+        cls,
+        parser,
+        experiment_name,
+        output_folder,
+        quiet,
+        args_dict,
+        debug,
+        wandb_project,
+        wandb_sweep,
+        **kwargs
     ):
         """
         Set up a logger for the experiment
@@ -582,9 +583,9 @@ class RunMe:
             if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                            kwargs[action.dest] != action.default) \
-                            and action.dest != 'load_model' \
-                            and action.dest != 'input_image':
+                        kwargs[action.dest] != action.default) \
+                        and action.dest != 'load_model' \
+                        and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))
 
         # Build up final logging folder tree with the non-default training parameters
