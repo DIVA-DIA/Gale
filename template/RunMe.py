@@ -172,6 +172,9 @@ class RunMe:
                 print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
 
             for i in range(sig_opt_runs):
+                # Refresh experiment object
+                experiment = conn.experiments(experiment.id).fetch()
+                # Check if budget has been met
                 if experiment.progress.observation_budget_consumed >= experiment.observation_budget:
                     print(f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
                           f"{experiment.observation_budget}. Finished here :)")
