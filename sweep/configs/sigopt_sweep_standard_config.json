@@ -1,13 +1,5 @@
 [
   {
-    "name": "solver",
-    "type": "categorical",
-    "categorical_values": [
-      {"enum_index": 1, "name": "svd"},
-      {"enum_index": 2, "name": "eigen"}
-    ]
-  },
-  {
     "name": "weight-decay",
     "type": "double",
     "precision": 5,
@@ -18,15 +10,5 @@
     "type": "double",
     "precision": 4,
     "bounds": {"max": 0.1, "min": 0.001}
-  },
-  {
-    "name": "num-samples",
-    "type": "int",
-    "bounds": {"max": 90000, "min": 100}
-  },
-  {
-    "name": "trim-lda-iterations",
-    "type": "int",
-    "bounds": {"max": 3, "min": 0}
   }
 ]
