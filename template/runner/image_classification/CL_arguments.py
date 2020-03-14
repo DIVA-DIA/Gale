@@ -69,14 +69,14 @@ class CLArguments(BaseCLArguments):
                                  help='use advanced init methods such as LDA')
         parser_init.add_argument('--num-samples',
                                  type=int,
-                                 default=1,
+                                 default=100000,
                                  help='number of samples to use to perform data-driven initialization')
         parser_init.add_argument('--init-function',
                                  choices=init_options,
                                  help='which initialization function should be used.')
         parser_init.add_argument('--max-patches',
                                  type=float,
-                                 default=10,
+                                 default=20,
                                  help='ratio of patch to extract from each sample for conv layers')
         parser_init.add_argument('--solver',
                                  type=str,
