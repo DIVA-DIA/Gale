@@ -197,8 +197,6 @@ class RunMe:
 
             # Run
             return_value = cls._execute(multi_run=multi_run, **kwargs)
-
-
             val = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
 
             # Get indexes of highest values
