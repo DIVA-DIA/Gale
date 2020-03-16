@@ -22,6 +22,7 @@ import tarfile
 import tempfile
 import time
 import traceback
+from itertools import count
 
 import colorlog
 import numpy as np
@@ -111,7 +112,6 @@ class RunMe:
     def _run_sigopt(
             cls,
             sigopt_token,
-            sigopt_runs,
             sigopt_parallel_bandwidth,
             sigopt_experiment_id,
             sigopt_best_epoch,
@@ -128,8 +128,6 @@ class RunMe:
         ----------
         sigopt_token : str
             SigOpt API token
-        sigopt_runs : int
-            Number of updates of SigOpt required
         sigopt_parallel_bandwidth : int
             Number of concurrent parallel optimization running
         sigopt_experiment_id : int
@@ -153,7 +151,6 @@ class RunMe:
         if sigopt_experiment_id is None:
             sigopt_experiment_id = cls.create_sigopt_experiment(
                 sigopt_token=sigopt_token,
-                sigopt_runs=sigopt_runs,
                 sigopt_parallel_bandwidth=sigopt_parallel_bandwidth,
                 minimize_best_epoch=sigopt_best_epoch,
                 **kwargs
@@ -161,7 +158,7 @@ class RunMe:
         # Authenticate to SigOpt
         conn = Connection(client_token=sigopt_token)
         # Running as many runs as necessary, stopping early is max budget is reached
-        for i in range(sigopt_runs):
+        for _ in count(1):
             # Refresh experiment object
             experiment = conn.experiments(sigopt_experiment_id).fetch()
 
