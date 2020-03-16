@@ -83,6 +83,11 @@ class CLArguments(BaseCLArguments):
                                  choices=['svd', 'eigen'],
                                  default='svd',
                                  help='Which solver is going to be used for LDA operations')
+        parser_init.add_argument('--activation-function',
+                                 type=str,
+                                 choices=['swish', 'softsign'],
+                                 default='swish',
+                                 help='Which activation function to use in the model for non-linearity')
 
         # Flags for normalizations
         parser_init.add_argument("--conv-normalize",
@@ -115,14 +120,8 @@ class CLArguments(BaseCLArguments):
                                  type=self.str2bool,
                                  default="False",
                                  help="Flag for trimming lda samples on last layer")
-
         parser_init.add_argument('--sn-ratio',
                                  type=int,
                                  default=0,
                                  help='ratio of noise to be added on the conv weights')
 
-        parser_init.add_argument('--activation-function',
-                                 type=str,
-                                 choices=['swish', 'softsign'],
-                                 default='swish',
-                                 help='Which activation function to use in the model for non-linearity')
