@@ -99,8 +99,8 @@ class RunMe:
             wandb.run.save()
 
         # Select the use case
-        if args['sig_opt'] is not None:
-            return cls._run_sig_opt(**args)
+        if args['sigopt_token'] is not None:
+            return cls._run_sigopt(**args)
         else:
             if args['inference']:
                 return cls._inference_execute(**args)
@@ -108,16 +108,17 @@ class RunMe:
                 return cls._execute(**args)
 
     @classmethod
-    def _run_sig_opt(
-        cls,
-        sig_opt,
-        sig_opt_token,
-        sig_opt_runs,
-        sig_opt_project,
-        sig_opt_experiment_id,
-        sig_opt_parallel_bandwidth,
-        multi_run,
-        **kwargs
+    def _run_sigopt(
+            cls,
+            sigopt_token,
+            sigopt_file,
+            sigopt_runs,
+            sigopt_project,
+            sigopt_parallel_bandwidth,
+            sigopt_experiment_id,
+            sigopt_best_epoch,
+            multi_run,
+            **kwargs
     ) -> dict:
         """
         This function creates a new SigOpt experiment and optimizes the selected parameters.
@@ -127,18 +128,20 @@ class RunMe:
 
         Parameters
         ----------
-        sig_opt : str
-            Path to a JSON file containing sig_opt variables and sig_opt bounds.
-        sig_opt_token : str
+        sigopt_token : str
             SigOpt API token
-        sig_opt_runs : int
+        sigopt_file : str
+            Path to a JSON file containing sig_opt variables and sig_opt bounds.
+        sigopt_runs : int
             Number of updates of SigOpt required
-        sig_opt_project : str
+        sigopt_project : str
             SigOpt project name
-        sig_opt_experiment_id : int
-            SigOpt experiment ID for resuming
-        sig_opt_parallel_bandwidth : int
+        sigopt_parallel_bandwidth : int
             Number of concurrent parallel optimization running
+        sigopt_experiment_id : int
+            SigOpt experiment ID for resuming
+        sigopt_best_epoch : bool
+            Flag for optimizing the best epoch (how soon the max val accuracy is achieved)
         multi_run : int
             If not None, indicates how many multiple runs needs to be done
 
@@ -148,64 +151,152 @@ class RunMe:
             At the moment it is not necessary to return meaningful values from here
         """
         # Put your SigOpt token here.
-        if sig_opt_token is None:
-            logging.error('Enter your SigOpt API token using --sig-opt-token')
+        if sigopt_token is None:
+            logging.error('Enter your SigOpt API token using --sigopt-token')
             raise SystemExit
-        else:
-            conn = Connection(client_token=sig_opt_token)
-            if sig_opt_experiment_id is None:
-                # Load parameters from file
-                with open(sig_opt, 'r') as f:
-                    parameters = json.loads(f.read())
-                experiment = conn.experiments().create(
-                    name=kwargs['experiment_name'],
-                    parameters=parameters,
-                    observation_budget=sig_opt_runs,
-                    project=sig_opt_project,
-                    parallel_bandwidth=sig_opt_parallel_bandwidth,
+
+        # If no experiment id provided, then create a new experiment
+        if sigopt_experiment_id is None:
+            sigopt_experiment_id = cls.create_sigopt_experiment(
+                sigopt_token=sigopt_token,
+                sigopt_file=sigopt_file,
+                sigopt_project=sigopt_project,
+                sigopt_runs=sigopt_runs,
+                sigopt_parallel_bandwidth=sigopt_parallel_bandwidth,
+                experiment_name=kwargs['experiment_name'],
+                minimize_best_epoch=sigopt_best_epoch,
+            )
+        # Authenticate to SigOpt
+        conn = Connection(client_token=sigopt_token)
+        # Running as many runs as necessary, stopping early is max budget is reached
+        for i in range(sigopt_runs):
+            # Refresh experiment object
+            experiment = conn.experiments(sigopt_experiment_id).fetch()
+
+            # It case the bandwidth is 1, currently open suggestions are dead runs so we remove them
+            if sigopt_parallel_bandwidth == 1:
+                conn.experiments(experiment.id).suggestions().delete(state="open")
+
+            # Check if budget has been met
+            if experiment.progress.observation_budget_consumed >= experiment.observation_budget:
+                print(
+                    f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
+                    f"{experiment.observation_budget}. Finished here :)"
                 )
-                sig_opt_experiment_id = experiment.id
-                print(f"Created experiment: https://sigopt.com/experiment/{sig_opt_experiment_id}")
-            experiment = conn.experiments(sig_opt_experiment_id).fetch()
-            # conn.experiments(experiment.id).suggestions().delete(state="open")
-            print(f"Fetched experiment: https://sigopt.com/experiment/{experiment.id}")
-            # Running as many runs as necessary, stopping early is max budget is reached
-            for i in range(sig_opt_runs):
-                # Refresh experiment object
-                experiment = conn.experiments(experiment.id).fetch()
-                # Check if budget has been met
-                if experiment.progress.observation_budget_consumed >= experiment.observation_budget:
-                    print(
-                        f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
-                        f"{experiment.observation_budget}. Finished here :)"
-                    )
-                    return experiment.progress.best_observation
+                return {}
 
-                # Get suggestion from SigOpt
-                suggestion = conn.experiments(experiment.id).suggestions().create()
-                params = suggestion.assignments
+            # Get suggestion from SigOpt
+            suggestion = conn.experiments(experiment.id).suggestions().create()
+            params = suggestion.assignments
 
-                # Override/inject CL arguments received from SigOpt
-                for key in params:
-                    if key in kwargs and isinstance(kwargs[key], bool):
-                        params[key] = params[key].lower() in ['true']
-                    kwargs[key.replace("-", "_")] = params[key]
+            # Override/inject CL arguments received from SigOpt
+            for key in params:
+                if key in kwargs and isinstance(kwargs[key], bool):
+                    params[key] = params[key].lower() in ['true']
+                kwargs[key.replace("-", "_")] = params[key]
 
-                # Run
-                return_value = cls._execute(multi_run=multi_run, **kwargs)
+            # Run
+            return_value = cls._execute(multi_run=multi_run, **kwargs)
 
-                if multi_run is None:
-                    score = float(np.max(return_value['val']))
-                    if type(score) == float:
-                        score = [score]
-                    for s in score:
-                        conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, value=s)
-                else:
-                    # In case of multi-run the return type will be a list (otherwise is a single float)
-                    logging.error(f"Multi-run with sigopt currently not implemented")
-                    # TODO: fetch the array of vals properly from return_value i.e. argmax for each row
-                    sys.exit(-1)
+
+            val = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
+
+            # Get indexes of highest values
+            indexes = np.argmax(val, axis=1)
+            # Select the highest values
+            scores = val[np.arange(val.shape[0])]
+
+            # Compute the averaged value and std of the runs (if multi_run is None then is a single value)
+            values = [{
+                "name": "validation_accuracy",
+                "value": float(np.mean(scores)),
+                "value_stddev": float(np.std(scores)) if multi_run is not None else None
+            }]
+
+            # If enabled, get the best epoch value
+            if sigopt_best_epoch:
+                # Correct for epoch -1 being at the end of the array if necessary
+                indexes[indexes == val.shape[1]] = -1
+                values.append({
+                    "name": "best_epoch",
+                    "value": float(np.round(np.mean(indexes))),
+                    "value_stddev": float(np.std(indexes))
+                })
+
+            # Report the observation
+            conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, values=values)
         return {}
+
+    @classmethod
+    def create_sigopt_experiment(
+            cls,
+            sigopt_token,
+            sigopt_file,
+            sigopt_project,
+            sigopt_runs,
+            sigopt_parallel_bandwidth,
+            experiment_name,
+            minimize_best_epoch=True,
+    ):
+        """
+        Create a SigOpt experiments with the selected parameters. The metric to maximize is the validation accuracy and
+        if enabled also the epoch is which this is realised.
+
+        Parameters
+        ----------
+        sigopt_token : str
+            SigOpt API token
+        sigopt_file : str
+            Path to a JSON file containing sig_opt variables and sig_opt bounds.
+        sigopt_runs : int
+            Number of updates of SigOpt required
+        sigopt_project : str
+            SigOpt project name
+        sigopt_parallel_bandwidth : int
+            Number of concurrent parallel optimization running
+        experiment_name : string
+            Name of the experiment. If not specify, accepted from command line
+        minimize_best_epoch : bool
+            Flag for minimizing the occurrence of the epoch where the best validation accuracy is achieved
+
+        Returns
+        -------
+        experiment.id : int
+            ID of the experiment created
+        """
+        assert sigopt_token is not None
+        assert sigopt_file is not None
+        assert sigopt_project is not None
+        assert sigopt_runs > 0
+
+        conn = Connection(client_token=sigopt_token)
+        # Load parameters from file
+        with open(sigopt_file, 'r') as f:
+            parameters = json.loads(f.read())
+
+        # Create the metrics for the experiments
+        metrics = [{
+            'name' : "validation_accuracy",
+            'objective' : "maximize",
+            'threshold' : 0
+        }]
+        if minimize_best_epoch:
+            metrics.append({
+                'name' : "best_epoch",
+                'objective' : "minimize",
+            })
+
+        # Create the actual experiment
+        experiment = conn.experiments().create(
+            name=experiment_name,
+            parameters=parameters,
+            observation_budget=sigopt_runs,
+            project=sigopt_project,
+            parallel_bandwidth=sigopt_parallel_bandwidth,
+            metrics=metrics
+        )
+        print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
+        return experiment.id
 
     ####################################################################################################################
     ####################################################################################################################
@@ -278,30 +369,18 @@ class RunMe:
             else:
                 return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
             logging.info(f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}')
-        except MemoryError as error:
-            # Output expected MemoryErrors.
-            if quiet:
-                print('Unhandled memory error: {}'.format(repr(exp)))
-            logging.error('Unhandled error: %s' % repr(exp))
-            logging.error(traceback.format_exc())
-            # Experimental return value to be resilient in case of error while being in a SigOpt optimization
-            TBWriter().add_scalar(tag='test/accuracy', scalar_value=-2.0)
-            return_value = {'train': -2.0, 'val': -2.0, 'test': -2.0}
         except Exception as exp:
             if quiet:
                 print('Unhandled error: {}'.format(repr(exp)))
             logging.error('Unhandled error: %s' % repr(exp))
             logging.error(traceback.format_exc())
             logging.error('Execution finished with errors :(')
-            # Experimental return value to be resilient in case of error while being in a SigOpt optimization
-            TBWriter().add_scalar(tag='test/accuracy', scalar_value=-1.0)
-            return_value = {'train': -1.0, 'val': -1.0, 'test': -1.0}
         finally:
             # Free logging resources
             logging.shutdown()
             logging.getLogger().handlers = []
             TBWriter().close()
-            print('All done! (Log files at {} )'.format(current_log_folder))
+            print('Execution done! (Log files at {} )'.format(current_log_folder))
         return return_value
 
     @classmethod
@@ -415,11 +494,11 @@ class RunMe:
         np.save(os.path.join(current_log_folder, 'train_values.npy'), train_scores)
         np.save(os.path.join(current_log_folder, 'val_values.npy'), val_scores)
         logging.info('Multi-run values for test-mean:{} test-std: {}'.format(np.mean(test_scores), np.std(test_scores)))
-        s = 'mean: {}\n\nstd: {}'.format(np.mean(test_scores), np.std(test_scores))
-        TBWriter().add_text(tag='Performance average and std over {} runs\n'.format(multi_run),
-                            text_string=s)
+        # Log results on TB
+        TBWriter().add_scalar(tag='test/accuracy', scalar_value=np.mean(test_scores))
+        TBWriter().add_scalar(tag='test/accuracy_std', scalar_value=np.std(test_scores))
 
-        return train_scores, val_scores, test_scores
+        return {'train': train_scores, 'val': val_scores, 'test': test_scores}
 
     ####################################################################################################################
     @classmethod
@@ -517,16 +596,16 @@ class RunMe:
 
     @classmethod
     def _set_up_logging(
-        cls,
-        parser,
-        experiment_name,
-        output_folder,
-        quiet,
-        args_dict,
-        debug,
-        wandb_project,
-        wandb_sweep,
-        **kwargs
+            cls,
+            parser,
+            experiment_name,
+            output_folder,
+            quiet,
+            args_dict,
+            debug,
+            wandb_project,
+            wandb_sweep,
+            **kwargs
     ):
         """
         Set up a logger for the experiment
@@ -583,9 +662,9 @@ class RunMe:
             if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                        kwargs[action.dest] != action.default) \
-                        and action.dest != 'load_model' \
-                        and action.dest != 'input_image':
+                            kwargs[action.dest] != action.default) \
+                            and action.dest != 'load_model' \
+                            and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))
 
         # Build up final logging folder tree with the non-default training parameters
