@@ -20,7 +20,7 @@
         "name": "max-patches",
         "type": "double",
         "precision": 2,
-        "bounds": {"max": 0.9, "min": 0.1}
+        "bounds": {"max": 0.99, "min": 0.1}
     },
     {
         "name": "conv-normalize",
@@ -53,9 +53,12 @@
         "bounds": {"max": 1, "min": 0}
     },
     {
-        "name": "trim-lda-iterations",
-        "type": "int",
-        "bounds": {"max": 10, "min": 0}
+        "name": "trim-lda",
+        "type": "categorical",
+        "categorical_values": [
+            {"enum_index": 1, "name": "true"},
+            {"enum_index": 2, "name": "false"}
+        ]
     },
     {
         "name": "sn-ratio",

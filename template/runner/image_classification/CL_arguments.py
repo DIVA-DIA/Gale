@@ -111,10 +111,11 @@ class CLArguments(BaseCLArguments):
                                  default=0,
                                  help="Flag for normalizing linear weights")
 
-        parser_init.add_argument('--trim-lda-iterations',
-                                 type=int,
-                                 default=0,
-                                 help='number of iterations for trimming the points of the lda')
+        parser_init.add_argument("--trim-lda",
+                                 type=self.str2bool,
+                                 default="False",
+                                 help="Flag for trimming lda samples on last layer")
+
         parser_init.add_argument('--sn-ratio',
                                  type=float,
                                  default=0,

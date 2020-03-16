@@ -238,7 +238,7 @@ def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
     return w, b
 
 
-def _filter_points_trimlda(init_input, init_labels, iterations, solver, **kwargs):
+def _filter_points_trimlda(init_input, init_labels, solver, iterations=3, **kwargs):
     """Given a set of points with their label it fits an LDA classifier and predicts on them.
     Then, only the samples positively classified are returned. This procedure can be done iteratively
     multiple times, specifying the amount by the parameter
@@ -251,10 +251,10 @@ def _filter_points_trimlda(init_input, init_labels, iterations, solver, **kwargs
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    iterations : int
-        Number of iterations for trimming the LDA. If set to 0 nothing is performed
     solver : str
         Either 'eigen' or 'svd'
+    iterations : int
+        Number of iterations for trimming the LDA. If set to 0 nothing is performed
         
     Returns
     -------
@@ -291,7 +291,7 @@ def _filter_points_trimlda(init_input, init_labels, iterations, solver, **kwargs
     return input, labels
 
 
-def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs):
+def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, trim_lda, **kwargs):
     """Compute LDA discriminants and relative bias and return them
 
     Parameters
@@ -306,6 +306,8 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
     lin_standardize : bool
     lin_scale : bool
         Flags for adapting the magnitude of the weights of linear layers
+    trim_lda : int
+        Flag denoting if the samples for last layer will be trimmed
 
     Returns
     -------
@@ -315,6 +317,8 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
         Bias array relative to W
     """
     logging.info('LDA Discriminants')
+    if trim_lda:
+        init_input, init_labels = _filter_points_trimlda(init_input=init_input, init_labels=init_labels, **kwargs)
 
     W, B = lda.discriminants(X=init_input, y=init_labels, **kwargs)
     # Adapt the size of the weights
@@ -403,7 +407,6 @@ def pure_lda(
     lin_normalize,
     lin_standardize,
     lin_scale,
-    trim_lda_iterations,
     **kwargs
 ):
     """Initialize the layer with pure LDA function and pure LDA discriminants for the last layer
@@ -430,8 +433,6 @@ def pure_lda(
     lin_standardize : bool
     lin_scale : bool
         Flags for adapting the magnitude of the weights of linear layers
-    trim_lda_iterations : int
-        Number of iterations for the trim lda
 
     Returns
     -------
@@ -439,40 +440,8 @@ def pure_lda(
         Weight matrix
     b : torch.Tensor
         Bias array
-
-    Notes
-    -----
-
-    Flowers , LDA_simple:
-
-        ONLY FIRST LAYER 
-        > (scale - none) and (normalize - none) are terrible on all levels
-        > All configuration which involve scale have the highest training loss by several orders of magnitude
-        > (standard - none) is the best and adding normalise or scale still "kind of" works but its lowering the 
-            performance on val/test
-
-        ONLY DISC
-        > (none _ Normalize Standardize Scale) is exactly the same as (none _ Standardize Scale)
-        > (none _ Normalize) has the highest performance on validation and the lowest loss on train. It is also the one
-            that gets destroyed the least by the first/second epoch of training
-        > (none _ Normalize Scale) competes with (none _ Normalize) but it has a very slightly higher train loss and 
-            it gets slightly more destroyed the least by the first/second epoch of training. However, it achieves a few
-            percentages more on both validation and test    
-
-        BOTH 
-        > (standard _ Normalize Scale) is achieving similar performances as (none _ Normalize Scale) on validation but 
-            performs much better on the training set (20% higher, around 80% acc)
-        > (standard _ Normalize Standardize Scale) is making 99.6% accuracy on the train set at START and score a low 
-            30% on validation (well below the 50% of (standard _ Normalize Scale) counterpart). Moreover, it stays at 
-            such high training performances with a ridiculously small loss on train set 
-            
-        OTHERS
-        > Initial experimentation seems to favor Swish over Softsign
     """
     network_depth = len(list(list(model.children())[0].children()))
-    init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
-    )
 
     ##################################################################
     # All layers but the last one
@@ -487,7 +456,7 @@ def pure_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+         W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -507,7 +476,6 @@ def mirror_lda(
     lin_normalize,
     lin_standardize,
     lin_scale,
-    trim_lda_iterations,
     **kwargs
 ):
     """Initialize the layer with LDA function, but it duplicates the columns with non-zero eigenvalue and mirrors them
@@ -535,8 +503,6 @@ def mirror_lda(
     lin_standardize : bool
     lin_scale : bool
         Flags for adapting the magnitude of the weights of linear layers
-    trim_lda_iterations : int
-        Number of iterations for the trim lda
 
     Returns
     -------
@@ -546,9 +512,6 @@ def mirror_lda(
         Bias array
     """
     network_depth = len(list(list(model.children())[0].children()))
-    init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
-    )
 
     ##################################################################
     # All layers but the last one
@@ -590,7 +553,6 @@ def highlander_lda(
     lin_normalize,
     lin_standardize,
     lin_scale,
-    trim_lda_iterations,
     **kwargs
 ):
     """
@@ -620,8 +582,6 @@ def highlander_lda(
     lin_standardize : bool
     lin_scale : bool
         Flags for adapting the magnitude of the weights of linear layers
-    trim_lda_iterations : int
-        Number of iterations for the trim lda
 
     Returns
     -------
@@ -631,9 +591,6 @@ def highlander_lda(
         Bias array
     """
     network_depth = len(list(list(model.children())[0].children()))
-    init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
-    )
 
     ##################################################################
     # All layers but the last one
@@ -696,7 +653,6 @@ def pure_pca(
     conv_normalize,
     conv_standardize,
     conv_scale,
-    trim_lda_iterations,
     **kwargs
 ):
     """Initialize the layer with pure PCA and leave the final layer "as it"
@@ -719,8 +675,6 @@ def pure_pca(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    trim_lda_iterations : int
-        Number of iterations for the trim lda
 
     Returns
     -------
@@ -730,9 +684,6 @@ def pure_pca(
         Bias array
     """
     network_depth = len(list(list(model.children())[0].children()))
-    init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
-    )
 
     ##################################################################
     # All layers but the last one
@@ -767,7 +718,6 @@ def lpca(
     lin_normalize,
     lin_standardize,
     lin_scale,
-    trim_lda_iterations,
     **kwargs
 ):
     """Initialize the layer with both PCA and LDA. The amount of columns could be an hyper-parameter
@@ -794,8 +744,6 @@ def lpca(
     lin_standardize : bool
     lin_scale : bool
         Flags for adapting the magnitude of the weights of linear layers
-    trim_lda_iterations : int
-        Number of iterations for the trim lda
 
     Returns
     -------
@@ -805,9 +753,6 @@ def lpca(
         Bias array
     """
     network_depth = len(list(list(model.children())[0].children()))
-    init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
-    )
 
     ##################################################################
     # All layers but the last one
@@ -862,7 +807,6 @@ def reverse_pca(
     lin_normalize,
     lin_standardize,
     lin_scale,
-    trim_lda_iterations,
     **kwargs
 ):
     """Initialize the layer with the reverse PCA procedure. The basic idea is to leverage labels to find which dimensions
@@ -893,8 +837,6 @@ def reverse_pca(
     lin_standardize : bool
     lin_scale : bool
         Flags for adapting the magnitude of the weights of linear layers
-    trim_lda_iterations : int
-        Number of iterations for the trim lda
 
     Returns
     -------
@@ -904,9 +846,6 @@ def reverse_pca(
         Bias array
     """
     network_depth = len(list(list(model.children())[0].children()))
-    init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
-    )
 
     ##################################################################
     # All layers but the last one
@@ -970,7 +909,6 @@ def relda(
     lin_normalize,
     lin_standardize,
     lin_scale,
-    trim_lda_iterations,
     **kwargs
 ):
     """Initialize the layer with repreated LDA (reLDA). The core idea is to split the available columns into a number
@@ -1004,8 +942,6 @@ def relda(
     lin_standardize : bool
     lin_scale : bool
         Flags for adapting the magnitude of the weights of linear layers
-    trim_lda_iterations : int
-        Number of iterations for the trim lda
 
     Returns
     -------
@@ -1024,9 +960,6 @@ def relda(
 
     """
     network_depth = len(list(list(model.children())[0].children()))
-    init_input, init_labels = _filter_points_trimlda(
-        init_input=init_input, init_labels=init_labels, iterations=trim_lda_iterations, **kwargs
-    )
 
     ##################################################################
     # All layers but the last one
