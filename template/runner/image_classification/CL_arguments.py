@@ -76,7 +76,7 @@ class CLArguments(BaseCLArguments):
                                  help='which initialization function should be used.')
         parser_init.add_argument('--max-patches',
                                  type=float,
-                                 default=20,
+                                 default=10,
                                  help='ratio of patch to extract from each sample for conv layers')
         parser_init.add_argument('--solver',
                                  type=str,
