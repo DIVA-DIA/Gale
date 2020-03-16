@@ -120,3 +120,9 @@ class CLArguments(BaseCLArguments):
                                  type=int,
                                  default=0,
                                  help='ratio of noise to be added on the conv weights')
+
+        parser_init.add_argument('--activation-function',
+                                 type=str,
+                                 choices=['swish', 'softsign'],
+                                 default='swish',
+                                 help='Which activation function to use in the model for non-linearity')

@@ -118,22 +118,24 @@ class InitBaseline(nn.Module):
 class InitBaselineVGGLike(nn.Module):
     expected_input_size = (32, 32)
 
-    def __init__(self, num_classes, **kwargs):
+    def __init__(self, num_classes, activation_function, **kwargs):
         super(InitBaselineVGGLike, self).__init__()
+
+        af = Swish if 'swish' in activation_function else nn.Softsign
 
         cb = True  # Enable/Disable bias for convolutional layers
         f = 32  # Initial number of dimensions
 
         # First layer: bring 32x32 to 28x28
-        self.conv_in = nn.Sequential(nn.Conv2d(3    , f    , bias=cb, kernel_size=3), Swish())
+        self.conv_in = nn.Sequential(nn.Conv2d(3    , f    , bias=cb, kernel_size=3), af())
         # Block 1: 28x28
-        self.conv_b1 = nn.Sequential(nn.Conv2d(f    , f * 2, bias=cb, kernel_size=3, padding=1), Swish())
+        self.conv_b1 = nn.Sequential(nn.Conv2d(f    , f * 2, bias=cb, kernel_size=3, padding=1), af())
         # Block 2: 28x28
-        self.conv_b2 = nn.Sequential(nn.Conv2d(f * 2, f * 4, bias=cb, kernel_size=3, padding=1, stride=2), Swish())
+        self.conv_b2 = nn.Sequential(nn.Conv2d(f * 2, f * 4, bias=cb, kernel_size=3, padding=1, stride=2), af())
         # Block 3: 14x14
-        self.conv_b3 = nn.Sequential(nn.Conv2d(f * 4, f * 8, bias=cb, kernel_size=3, padding=1, stride=2), Swish())
+        self.conv_b3 = nn.Sequential(nn.Conv2d(f * 4, f * 8, bias=cb, kernel_size=3, padding=1, stride=2), af())
         # Block 4: 7x7
-        self.conv_b4 = nn.Sequential(nn.Conv2d(f * 8, f * 8, bias=cb, kernel_size=3, padding=1), Swish(),
+        self.conv_b4 = nn.Sequential(nn.Conv2d(f * 8, f * 8, bias=cb, kernel_size=3, padding=1), af(),
             # Last conv + GAP + flatten
             nn.AdaptiveAvgPool2d(output_size=(1, 1)),
             Flatten(),
