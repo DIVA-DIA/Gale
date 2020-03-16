@@ -111,9 +111,7 @@ class RunMe:
     def _run_sigopt(
             cls,
             sigopt_token,
-            sigopt_file,
             sigopt_runs,
-            sigopt_project,
             sigopt_parallel_bandwidth,
             sigopt_experiment_id,
             sigopt_best_epoch,
@@ -130,12 +128,8 @@ class RunMe:
         ----------
         sigopt_token : str
             SigOpt API token
-        sigopt_file : str
-            Path to a JSON file containing sig_opt variables and sig_opt bounds.
         sigopt_runs : int
             Number of updates of SigOpt required
-        sigopt_project : str
-            SigOpt project name
         sigopt_parallel_bandwidth : int
             Number of concurrent parallel optimization running
         sigopt_experiment_id : int
@@ -159,12 +153,10 @@ class RunMe:
         if sigopt_experiment_id is None:
             sigopt_experiment_id = cls.create_sigopt_experiment(
                 sigopt_token=sigopt_token,
-                sigopt_file=sigopt_file,
-                sigopt_project=sigopt_project,
                 sigopt_runs=sigopt_runs,
                 sigopt_parallel_bandwidth=sigopt_parallel_bandwidth,
-                experiment_name=kwargs['experiment_name'],
                 minimize_best_epoch=sigopt_best_epoch,
+                **kwargs
             )
         # Authenticate to SigOpt
         conn = Connection(client_token=sigopt_token)
@@ -233,8 +225,10 @@ class RunMe:
             sigopt_project,
             sigopt_runs,
             sigopt_parallel_bandwidth,
+            sigopt_conditionals_file,
             experiment_name,
             minimize_best_epoch=True,
+            **kwargs
     ):
         """
         Create a SigOpt experiments with the selected parameters. The metric to maximize is the validation accuracy and
@@ -252,6 +246,8 @@ class RunMe:
             SigOpt project name
         sigopt_parallel_bandwidth : int
             Number of concurrent parallel optimization running
+        sigopt_conditionals_file : str
+            Path to a JSON file containing sigopt conditionals
         experiment_name : string
             Name of the experiment. If not specify, accepted from command line
         minimize_best_epoch : bool
@@ -284,9 +280,16 @@ class RunMe:
                 'objective' : "minimize",
             })
 
+        # If specified, load the conditionals
+        conditionals = []
+        if len(metrics) == 1 and sigopt_conditionals_file is not None:
+            with open(sigopt_conditionals_file, 'r') as f:
+                conditionals = json.loads(f.read())
+
         # Create the actual experiment
         experiment = conn.experiments().create(
             name=experiment_name,
+            conditionals=conditionals,
             parameters=parameters,
             observation_budget=sigopt_runs,
             project=sigopt_project,

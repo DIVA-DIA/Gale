@@ -125,6 +125,9 @@ class BaseCLArguments:
                                    default=True,
                                    action='store_true',
                                    help='flag for optimizing the best epoch (how soon the max val accuracy is achieved)')
+        parser_sigopt.add_argument('--sigopt-conditionals-file',
+                                   type=str,
+                                   help='path to a JSON file containing sigopt conditionals')
 
 
     def _darwin_options(self):
