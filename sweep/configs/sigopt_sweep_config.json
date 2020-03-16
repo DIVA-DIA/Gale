@@ -3,7 +3,7 @@
         "name": "weight-decay",
         "type": "double",
         "precision": 5,
-        "bounds": {"max": 0.01, "min": 0.0}
+        "bounds": {"max": 0.005, "min": 0.0}
     },
     {
         "name": "lr",
@@ -14,13 +14,7 @@
     {
         "name": "num-samples",
         "type": "int",
-        "bounds": {"max": 8012, "min": 10}
-    },
-    {
-        "name": "max-patches",
-        "type": "double",
-        "precision": 2,
-        "bounds": {"max": 0.99, "min": 0.1}
+        "bounds": {"max": 90000, "min": 100}
     },
     {
         "name": "conv-normalize",
@@ -62,8 +56,7 @@
     },
     {
         "name": "sn-ratio",
-        "type": "double",
-        "precision": 2,
-        "bounds": {"max": 100.0, "min": 0.0}
+        "type": "int",
+        "bounds": {"max": 5, "min": 0}
     }
 ]

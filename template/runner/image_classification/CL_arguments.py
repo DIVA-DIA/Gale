@@ -117,6 +117,6 @@ class CLArguments(BaseCLArguments):
                                  help="Flag for trimming lda samples on last layer")
 
         parser_init.add_argument('--sn-ratio',
-                                 type=float,
+                                 type=int,
                                  default=0,
                                  help='ratio of noise to be added on the conv weights')
