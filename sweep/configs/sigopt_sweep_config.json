@@ -14,7 +14,7 @@
     {
         "name": "num-samples",
         "type": "int",
-        "bounds": {"max": 90000, "min": 100}
+        "bounds": {"max": 50000, "min": 100}
     },
     {
         "name": "conv-normalize",

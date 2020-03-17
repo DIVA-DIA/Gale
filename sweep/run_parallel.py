@@ -16,7 +16,7 @@ SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 #SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_sweep_config.json"
 SIGOPT_PROJECT = "init"
-SIGOPT_PARALLEL_BANDWIDTH = 1
+SIGOPT_PARALLEL_BANDWIDTH = 2
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
@@ -54,15 +54,15 @@ DATASETS = [
 ]
 
 RUNS = [
-    ("random",          170941, ""),
-    ("pure_lda",        170942, ""),
-    ("mirror_lda",      170943, ""),
-    ("highlander_lda",  170944, ""),
-    ("pure_pca",        170945, ""),
-    ("pcdisc",          170946, ""),
-    ("lpca",            170947, ""),
+    ("random",          None, ""),
+    ("pure_lda",        None, ""),
+    ("mirror_lda",      None, ""),
+    ("highlander_lda",  None, ""),
+    ("pure_pca",        None, ""),
+    ("pcdisc",          None, ""),
+    ("lpca",            None, ""),
     # ("reverse_pca", None, ""),
-    ("relda",           170948, ""),
+    ("relda",           None, ""),
 ]
 
 ##########################################################################
@@ -96,6 +96,7 @@ class ExperimentsBuilder(object):
                         f"--sigopt-experiment-id {experiment_id} "
                         f"-j {ExperimentsBuilder.num_workers():d} "
                         f"--multi-run {RUNS_PER_VARIANCE} "
+                        f"--validation-interval 2 "
                     )
                     # Create as many parallel one as required
                     for _ in range(SIGOPT_PARALLEL_BANDWIDTH):
