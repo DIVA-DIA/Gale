@@ -76,6 +76,10 @@ class BaseRunner(AbstractRunner):
                 multi_run_label = f"_{kwargs['run']}" if 'run' in kwargs else ""
                 TBWriter().add_scalar(tag='test/accuracy' + multi_run_label, scalar_value=-1.0)
                 payload['test'] = -1.0
+                if 'train' not in payload:
+                    payload['train'] = []
+                if 'val' not in payload:
+                    payload['val'] = []
 
         return payload
 
