@@ -293,7 +293,7 @@ class RunMe:
             parallel_bandwidth=sigopt_parallel_bandwidth,
             metrics=metrics
         )
-        print(f"Created experiment: https://sigopt.com/experiment/{experiment.id}")
+        print(f"Created experiment {experiment_name} -> https://sigopt.com/experiment/{experiment.id}")
         return experiment.id
 
     ####################################################################################################################
