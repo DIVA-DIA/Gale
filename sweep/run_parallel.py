@@ -1,4 +1,3 @@
-import json
 import multiprocessing as mp
 import os
 import sys
@@ -10,12 +9,14 @@ import numpy as np
 import torch
 from sigopt import Connection
 
+from template.RunMe import RunMe
+
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-SIGOPT_FILE = "sweep/configs/sigopt_sweep_standard_config.json"
+SIGOPT_FILE = "sweep/configs/sigopt_sweep_config.json"
 SIGOPT_PROJECT = "init"
-SIGOPT_PARALLEL_BANDWIDTH = 2
+SIGOPT_PARALLEL_BANDWIDTH = 1
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
@@ -26,10 +27,10 @@ SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "benchmark"
-EPOCHS = 100 # For CB55 is /10
-RUNS_PER_INSTANCE = 50 # 150 # 10+ * num of parameters to optimize usually
-RUNS_PER_VARIANCE = 20
+EXPERIMENT_NAME_PREFIX = "final"
+EPOCHS = 50 # For CB55 is /10
+SIGOPT_RUNS = 150 # 150 # 10+ * num of parameters to optimize usually
+RUNS_PER_VARIANCE = 5
 PROCESSES_PER_GPU = 2
 
 
@@ -54,15 +55,15 @@ DATASETS = [
 
 RUNS = [
     ("random", None, ""),
-    ("pure_lda", None, "--solver eigen --lin-normalize 1 --lin-standardize 1"),
-    ("pure_lda", None, "--solver svd --lin-normalize 1"),
-    # ("mirror_lda", None, ""),
-    # ("highlander_lda", None, ""),
-    ("pure_pca", None, "--conv-normalize 1 --conv-standardize 1 --conv-scale 1"),
-    # ("lpca", None),
+    ("pure_lda", None, ""),
+    ("mirror_lda", None, ""),
+    ("highlander_lda", None, ""),
+    ("pure_pca", None, ""),
+    ("lpca", None),
     # ("reverse_pca", None, ""),
-    # ("relda", None, ""),
+    ("relda", None, ""),
 ]
+
 
 ##########################################################################
 # Creating Experiments
@@ -76,39 +77,25 @@ class ExperimentsBuilder(object):
             for model in MODELS:
                 for (init, experiment_id, extra) in RUNS:
                     experiment_name = EXPERIMENT_NAME_PREFIX + '_' + init + '_' + Path(dataset).stem
-                    if 'solver' in extra:
-                        experiment_name = EXPERIMENT_NAME_PREFIX + '_' + init + '_'
-                        experiment_name += 'svd' if 'svd' in extra else 'eigen' + '_'
-                        experiment_name += Path(dataset).stem
                     # Create an experiment and gets its ID if necessary
                     if experiment_id is None:
-                        # Load parameters from file
-                        with open(SIGOPT_FILE, 'r') as f:
-                            parameters = json.loads(f.read())
-
-                        conn = Connection(client_token=SIGOPT_TOKEN)
-                        experiment = conn.experiments().create(
-                            name=experiment_name,
-                            parameters=parameters,
-                            observation_budget=RUNS_PER_INSTANCE,
-                            project=SIGOPT_PROJECT,
-                            parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
+                        experiment_id = RunMe().create_sigopt_experiment(
+                            sigopt_token=SIGOPT_TOKEN,
+                            sigopt_file=SIGOPT_FILE,
+                            sigopt_project=SIGOPT_PROJECT,
+                            sigopt_runs=SIGOPT_RUNS,
+                            sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
+                            experiment_name=experiment_name,
+                            minimize_best_epoch=True
                         )
-                        experiment_id = experiment.id
                     # Setup the additional parameters (not default ones)
                     additional = (
                         f"{extra} "
-                        f"--wandb-project sigopt_normalisation_{Path(dataset).stem} "                
-                        f"--sig-opt-token {SIGOPT_TOKEN:s} "
-                        f"--sig-opt-runs {str(RUNS_PER_INSTANCE):s} "
-                        f"--sig-opt-project {SIGOPT_PROJECT:s} "
-                        f"--sig-opt {SIGOPT_FILE} "
-                        f"--sig-opt-parallel-bandwidth {SIGOPT_PARALLEL_BANDWIDTH} "  
-                        f"--sig-opt-experiment-id {experiment_id} "
+                        f"--wandb-project sigopt_" + EXPERIMENT_NAME_PREFIX + f"_{Path(dataset).stem} "                
+                        f"--sigopt-token {SIGOPT_TOKEN:s} "
+                        f"--sigopt-experiment-id {experiment_id} "
                         f"-j {ExperimentsBuilder.num_workers():d} "
-                        # Additional non-default decisions
-                        f"--num-samples 90000 "
-                        f"--validation-interval 2 "
+                        f"--multi-run {RUNS_PER_VARIANCE} "
                     )
                     # Create as many parallel one as required
                     for _ in range(SIGOPT_PARALLEL_BANDWIDTH):
@@ -139,7 +126,7 @@ class ExperimentsBuilder(object):
                 for (init, experiment_id, extra) in RUNS:
                     experiment_name = EXPERIMENT_NAME_PREFIX + '_' + init + '_' + Path(dataset).stem
                     best_parameters = ExperimentsBuilder._get_best_parameters(
-                        conn, sigopt_list, [EXPERIMENT_NAME_PREFIX, init, Path(dataset).stem]
+                        conn, sigopt_list, [experiment_name]
                     )
                     for i in range(RUNS_PER_VARIANCE):
                         experiments.append(Experiment(
@@ -151,7 +138,7 @@ class ExperimentsBuilder(object):
                             init=init,
                             additional=(
                                 f"{extra} "
-                                f"--wandb-project sigopt_variance_{Path(dataset).stem} "
+                                f"--wandb-project sigopt_" + EXPERIMENT_NAME_PREFIX + f"_{Path(dataset).stem} "       
                                 f"-j {ExperimentsBuilder.num_workers():d} "                                                                                         
                                 f"{' '.join(['--' + k + ' ' + str(v) for k, v in best_parameters.items()])}"
                             )
@@ -266,22 +253,16 @@ if __name__ == '__main__':
     # Init queue item
     queue = Queue()
 
-    # print("sigopt...")
-    # experiments = []
-    # experiments.extend(ExperimentsBuilder.build_sigopt_combinations())
-    # # experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
-    # #     ["RNDBidir"],["/local/scratch/Flowers"], EXPERIMENT_NAME_PREFIX, LOG_FOLDER, NUMBER_EPOCHS,
-    # # ))
-    # [queue.put(e) for e in experiments]
-    # run_experiments(NUM_GPUs, PROCESSES_PER_GPU, queue)
-
-    print("variance...")
+    print("sigopt...")
     experiments = []
-    experiments.extend(ExperimentsBuilder.build_variance_combinations())
-    # experiments.extend(ExperimentsBuilder.build_variance_combinations(
-    #     ["FFTBidir"],["/local/scratch/HAM10000"], EXPERIMENT_NAME_PREFIX, LOG_FOLDER, NUMBER_EPOCHS,
-    # ))
+    experiments.extend(ExperimentsBuilder.build_sigopt_combinations())
     [queue.put(e) for e in experiments]
     run_experiments(NUM_GPUs, PROCESSES_PER_GPU, queue)
+
+    # print("variance...")
+    # experiments = []
+    # experiments.extend(ExperimentsBuilder.build_variance_combinations())
+    # [queue.put(e) for e in experiments]
+    # run_experiments(NUM_GPUs, PROCESSES_PER_GPU, queue)
 
     print("...finished!")
