@@ -13,7 +13,7 @@ from template.RunMe import RunMe
 
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+#SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_sweep_config.json"
 SIGOPT_PROJECT = "init"
 SIGOPT_PARALLEL_BANDWIDTH = 1
@@ -54,16 +54,16 @@ DATASETS = [
 ]
 
 RUNS = [
-    ("random", None, ""),
-    ("pure_lda", None, ""),
-    ("mirror_lda", None, ""),
-    ("highlander_lda", None, ""),
-    ("pure_pca", None, ""),
-    ("lpca", None),
+    ("random",          170941, ""),
+    ("pure_lda",        170942, ""),
+    ("mirror_lda",      170943, ""),
+    ("highlander_lda",  170944, ""),
+    ("pure_pca",        170945, ""),
+    ("pcdisc",          170946, ""),
+    ("lpca",            170947, ""),
     # ("reverse_pca", None, ""),
-    ("relda", None, ""),
+    ("relda",           170948, ""),
 ]
-
 
 ##########################################################################
 # Creating Experiments
