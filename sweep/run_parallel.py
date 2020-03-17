@@ -13,7 +13,7 @@ from template.RunMe import RunMe
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-SIGOPT_FILE = "sweep/configs/sigopt_sweep_config.json"
+SIGOPT_FILE = "sweep/configs/sigopt_final_config.json"
 SIGOPT_PROJECT = "init"
 SIGOPT_PARALLEL_BANDWIDTH = 4
 
@@ -28,10 +28,10 @@ OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/o
 # Experiment Parameters ##################################################
 EXPERIMENT_NAME_PREFIX = "final"
 EPOCHS = 50 # For CB55 is /10
-SIGOPT_RUNS = 150 # 150 # 10+ * num of parameters to optimize usually
+SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = 5
-RUNS_PER_VARIANCE = 5
-PROCESSES_PER_GPU = 4
+# RUNS_PER_VARIANCE = 5
+PROCESSES_PER_GPU = 5
 
 
 ##########################################################################
@@ -125,7 +125,16 @@ class ExperimentsBuilder(object):
             for model in models:
                 for (init, experiment_id, extra) in runs:
                     experiment_name = experiment_name_prefix + '_' + init + '_' + Path(dataset).stem
-                    # Create an experiment and gets its ID if necessary
+
+                    # TODO remove me! Nasty fix for custom settings per run init
+                    if 'random' in init:
+                        sigopt_file = "sweep/configs/sigopt_final_config_random.json"
+                    elif 'pure_pca' in init:
+                        sigopt_file = "sweep/configs/sigopt_final_config_pca.json"
+                    else:
+                        sigopt_file = SIGOPT_FILE
+
+                        # Create an experiment and gets its ID if necessary
                     if experiment_id is None:
                         experiment_id = RunMe().create_sigopt_experiment(
                             sigopt_token=sigopt_token,
