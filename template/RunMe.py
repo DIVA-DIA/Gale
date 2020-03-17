@@ -461,12 +461,12 @@ class RunMe:
         # As many times as runs
         for i in range(multi_run):
             logging.info('Multi-Run: {} of {}'.format(i + 1, multi_run))
-            performance = runner_class().single_run(run=i,
+            return_value = runner_class().single_run(run=i,
                                                     current_log_folder=current_log_folder,
                                                     multi_run=multi_run,
                                                     epochs=epochs,
                                                     **kwargs)
-            train_scores[i, :], val_scores[i, :], test_scores[i] = (performance['train'], performance['val'], performance['test'])
+            train_scores[i, :], val_scores[i, :], test_scores[i] = (return_value['train'], return_value['val'], return_value['test'])
 
 
             # Generate and add to tensorboard the shaded plot for train

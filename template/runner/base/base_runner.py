@@ -55,31 +55,13 @@ class BaseRunner(AbstractRunner):
         # Prepare
         d = self.prepare(**kwargs)
 
+        # Train routine
         if not kwargs["test_only"]:
-            try:
-                # Train routine
-                payload['train'], payload['val'] = self.train_routine(**d, **kwargs)
-            except Exception as exp:
-                logging.error('Unhandled error: %s' % repr(exp))
-                logging.error(traceback.format_exc())
-                logging.error('Train routine ended with errors :(')
+            payload['train'], payload['val'] = self.train_routine(**d, **kwargs)
 
         # Test routine
         if "test_loader" in d and d["test_loader"] is not None:
-            try:
-                payload['test'] = self.test_routine(**d, **kwargs)
-            except Exception as exp:
-                logging.error('Unhandled error: %s' % repr(exp))
-                logging.error(traceback.format_exc())
-                logging.error('Test routine ended with errors :(')
-                # Experimental return value to be resilient in case of error while being in a SigOpt optimization
-                multi_run_label = f"_{kwargs['run']}" if 'run' in kwargs else ""
-                TBWriter().add_scalar(tag='test/accuracy' + multi_run_label, scalar_value=-1.0)
-                payload['test'] = -1.0
-                if 'train' not in payload:
-                    payload['train'] = []
-                if 'val' not in payload:
-                    payload['val'] = []
+            payload['test'] = self.test_routine(**d, **kwargs)
 
         return payload
 
@@ -219,33 +201,37 @@ class BaseRunner(AbstractRunner):
         logging.info('Starting...')
         val_value = np.zeros((epochs + 1 - start_epoch))
         train_value = np.zeros((epochs - start_epoch))
-
         # Validate before training
-        val_value[-1] = self._validate(epoch=-1, **kwargs)
-        logging.info(f'Val epoch [-]: {val_value[-1]:.2f}')
-        for epoch in range(start_epoch, epochs):
-            # Train
-            train_value[epoch] = self._train(epoch=epoch, **kwargs)
+        try:
+            val_value[-1] = self._validate(epoch=-1, **kwargs)
+            logging.info(f'Val epoch [-]: {val_value[-1]:.2f}')
+            for epoch in range(start_epoch, epochs):
+                # Train
+                train_value[epoch] = self._train(epoch=epoch, **kwargs)
 
-            if epoch % validation_interval == 0:
-                # Validate
-                val_value[epoch] = self._validate(epoch=epoch, **kwargs)
-                logging.info(f'Val epoch [{epoch}]: {val_value[epoch]:.2f}')
-                # Checkpoint
-                best_value = self.setup.checkpoint(epoch=epoch,
-                                                   new_value=val_value[epoch],
-                                                   best_value=best_value,
-                                                   log_dir=current_log_folder,
-                                                   epoch_lr_schedulers=epoch_lr_schedulers,
-                                                   checkpoint_all_epochs=checkpoint_all_epochs,
-                                                   **kwargs)
+                if epoch % validation_interval == 0:
+                    # Validate
+                    val_value[epoch] = self._validate(epoch=epoch, **kwargs)
+                    logging.info(f'Val epoch [{epoch}]: {val_value[epoch]:.2f}')
+                    # Checkpoint
+                    best_value = self.setup.checkpoint(epoch=epoch,
+                                                       new_value=val_value[epoch],
+                                                       best_value=best_value,
+                                                       log_dir=current_log_folder,
+                                                       epoch_lr_schedulers=epoch_lr_schedulers,
+                                                       checkpoint_all_epochs=checkpoint_all_epochs,
+                                                       **kwargs)
 
-            # Update the LR according to the scheduler
-            for lr_scheduler in epoch_lr_schedulers:
-                lr_scheduler.step(val_value[epoch])
-
-        logging.info('Training done')
-        return train_value, val_value
+                # Update the LR according to the scheduler
+                for lr_scheduler in epoch_lr_schedulers:
+                    lr_scheduler.step(val_value[epoch])
+        except Exception as exp:
+            logging.error('Unhandled error: %s' % repr(exp))
+            logging.error(traceback.format_exc())
+            logging.error('Train routine ended with errors :(')
+        finally:
+            logging.info('Training done')
+            return train_value, val_value
 
     def test_routine(self, model,  criterion, epochs, current_log_folder,
                      **kwargs):
@@ -266,31 +252,40 @@ class BaseRunner(AbstractRunner):
         Returns
         -------
         test_value : float
-            Accuracy value for test split
+            Accuracy value for test split, -1 if an error occurred
         """
+        test_value = -1.0
+        try:
+            # Load the best model before evaluating on the test set (early stopping)
+            if os.path.exists(os.path.join(current_log_folder, 'best.pth')):
+                logging.info('Loading the best model before evaluating on the test set.')
+                kwargs["load_model"] = os.path.join(current_log_folder, 'best.pth')
+            elif os.path.exists(os.path.join(current_log_folder, 'checkpoint.pth')):
+                logging.warning('File model_best.pth.tar not found in {}'.format(current_log_folder))
+                logging.warning('Using checkpoint.pth.tar instead')
+                kwargs["load_model"] = os.path.join(current_log_folder, 'checkpoint.pth')
+            elif kwargs["load_model"] is not None:
+                if not os.path.exists(kwargs["load_model"]):
+                    raise Exception(f"Could not find model {kwargs['load_model']}")
+            else:
+                raise Exception(f'Both best.pth and checkpoint.pth are not not found in'
+                                 f' {current_log_folder}. No --load-model provided.')
+            # Load the model
+            model = self.setup.setup_model(**kwargs)
+            # Test
+            test_value = self._test(model=model, criterion=criterion, epoch=epochs - 1, **kwargs)
 
-        # Load the best model before evaluating on the test set (early stopping)
-        if os.path.exists(os.path.join(current_log_folder, 'best.pth')):
-            logging.info('Loading the best model before evaluating on the test set.')
-            kwargs["load_model"] = os.path.join(current_log_folder, 'best.pth')
-        elif os.path.exists(os.path.join(current_log_folder, 'checkpoint.pth')):
-            logging.warning('File model_best.pth.tar not found in {}'.format(current_log_folder))
-            logging.warning('Using checkpoint.pth.tar instead')
-            kwargs["load_model"] = os.path.join(current_log_folder, 'checkpoint.pth')
-        elif kwargs["load_model"] is not None:
-            if not os.path.exists(kwargs["load_model"]):
-                raise Exception(f"Could not find model {kwargs['load_model']}")
-        else:
-            raise Exception(f'Both best.pth and checkpoint.pth are not not found in'
-                             f' {current_log_folder}. No --load-model provided.')
-
-        model = self.setup.setup_model(**kwargs)
-
-        # Test
-        test_value = self._test(model=model, criterion=criterion, epoch=epochs - 1, **kwargs)
-        logging.info(f'Test: {test_value}')
-        logging.info('Training completed')
-        return test_value
+        except Exception as exp:
+            logging.error('Unhandled error: %s' % repr(exp))
+            logging.error(traceback.format_exc())
+            logging.error('Test routine ended with errors :(')
+            # Experimental return value to be resilient in case of error while being in a SigOpt optimization
+            multi_run_label = f"_{kwargs['run']}" if 'run' in kwargs else ""
+            TBWriter().add_scalar(tag='test/accuracy' + multi_run_label, scalar_value=test_value)
+        finally:
+            logging.info(f'Test: {test_value}')
+            logging.info('Testing completed')
+            return test_value
 
     ####################################################################################################################
     """
