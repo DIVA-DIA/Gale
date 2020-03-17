@@ -1,7 +1,6 @@
 import multiprocessing as mp
 import os
 import sys
-import time
 from multiprocessing import Process, Queue
 from pathlib import Path
 
@@ -12,11 +11,11 @@ from sigopt import Connection
 from template.RunMe import RunMe
 
 # Init SigOpt Paramters ##################################################
-# SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
+# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_sweep_config.json"
 SIGOPT_PROJECT = "init"
-SIGOPT_PARALLEL_BANDWIDTH = 3
+SIGOPT_PARALLEL_BANDWIDTH = 4
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
@@ -30,8 +29,9 @@ OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/o
 EXPERIMENT_NAME_PREFIX = "final"
 EPOCHS = 50 # For CB55 is /10
 SIGOPT_RUNS = 150 # 150 # 10+ * num of parameters to optimize usually
+MULTI_RUN = 5
 RUNS_PER_VARIANCE = 5
-PROCESSES_PER_GPU = 3
+PROCESSES_PER_GPU = 4
 
 
 ##########################################################################
@@ -54,16 +54,15 @@ DATASETS = [
 ]
 
 RUNS = [
-    ("pure_lda", None, ""),
-    # ("random",          171185, ""),
-    # ("pure_lda",        171186, ""),
-    # ("mirror_lda",      171187, ""),
-    # ("highlander_lda",  171188, ""),
-    # ("pure_pca",        171189, ""),
-    # ("pcdisc",          171190, ""),
-    # ("lpca",            171191, ""),
-    # # ("reverse_pca", None, ""),
-    # ("relda",           171192, ""),
+    ("random",          None, ""),
+    ("pure_lda",        None, ""),
+    ("mirror_lda",      None, ""),
+    ("highlander_lda",  None, ""),
+    ("pure_pca",        None, ""),
+    ("pcdisc",          None, ""),
+    ("lpca",            None, ""),
+    # ("reverse_pca", None, ""),
+    ("relda",           None, ""),
 ]
 
 ##########################################################################
@@ -72,93 +71,135 @@ RUNS = [
 class ExperimentsBuilder(object):
 
     @staticmethod
-    def build_sigopt_combinations():
+    def build_sigopt_combinations(
+            experiment_name_prefix,
+            datasets,
+            models,
+            runs,
+            multi_run,
+            epochs,
+            output_folder,
+            sigopt_token,
+            sigopt_file,
+            sigopt_project,
+            sigopt_runs,
+            sigopt_parallel_bandwidth,
+    ):
+        """Create a set of experiments to be run in parallel given the configurations
+
+        Parameters
+        ----------
+        experiment_name_prefix : str
+            String to prefix to the experiment name
+        datasets : List(str)
+            List of paths to datasets to be used
+        models : List(str)
+            List of models names to be used
+        runs : List
+            List of runs of type List[Tuple[str, int, str]] as:
+             (--init-function, --sigopt-experiment-id, "string with extra parameter for this run only")
+        multi_run : int
+            Number of multi-run to perform
+        epochs : int
+            Max epochs for each experiment
+        output_folder : str
+            Path to the output folder
+        sigopt_token : str
+            SigOpt API token
+        sigopt_file : str
+            Path to a JSON file containing sig_opt variables and sig_opt bounds.
+        sigopt_runs : int
+            Number of updates of SigOpt required
+        sigopt_project : str
+            SigOpt project name
+        sigopt_parallel_bandwidth : int
+            Number of concurrent parallel optimization running
+
+        Returns
+        -------
+        experiments : List(Experiment)
+            List of created experiments ready to be run
+        """
         experiments = []
-        for dataset in DATASETS:
-            for model in MODELS:
-                for (init, experiment_id, extra) in RUNS:
-                    experiment_name = EXPERIMENT_NAME_PREFIX + '_' + init + '_' + Path(dataset).stem
+        for dataset in datasets:
+            for model in models:
+                for (init, experiment_id, extra) in runs:
+                    experiment_name = experiment_name_prefix + '_' + init + '_' + Path(dataset).stem
                     # Create an experiment and gets its ID if necessary
                     if experiment_id is None:
                         experiment_id = RunMe().create_sigopt_experiment(
-                            sigopt_token=SIGOPT_TOKEN,
-                            sigopt_file=SIGOPT_FILE,
-                            sigopt_project=SIGOPT_PROJECT,
-                            sigopt_runs=SIGOPT_RUNS,
-                            sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
+                            sigopt_token=sigopt_token,
+                            sigopt_file=sigopt_file,
+                            sigopt_project=sigopt_project,
+                            sigopt_runs=sigopt_runs,
+                            sigopt_parallel_bandwidth=sigopt_parallel_bandwidth,
                             experiment_name=experiment_name,
                             minimize_best_epoch=True
                         )
 
                     # Delete open suggestions if any
-                    conn = Connection(client_token=SIGOPT_TOKEN)
+                    conn = Connection(client_token=sigopt_token)
                     experiment = conn.experiments(experiment_id).fetch()
                     conn.experiments(experiment.id).suggestions().delete(state="open")
 
                     # Setup the additional parameters (not default ones)
                     additional = (
                         f"{extra} "
-                        f"--wandb-project sigopt_" + EXPERIMENT_NAME_PREFIX + f"_{Path(dataset).stem} "                
-                        f"--sigopt-token {SIGOPT_TOKEN:s} "
+                        f"--wandb-project sigopt_{experiment_name_prefix}_{Path(dataset).stem} "
+                        f"--sigopt-token {sigopt_token:s} "
                         f"--sigopt-experiment-id {experiment_id} "
-                        f"-j {ExperimentsBuilder.num_workers():d} "
-                        f"--multi-run {RUNS_PER_VARIANCE} "
+                        f"-j {ExperimentProcess.num_workers():d} "
+                        f"--multi-run {multi_run} "
                         f"--validation-interval 2 "
                     )
+
                     # Create as many parallel one as required
-                    for _ in range(SIGOPT_PARALLEL_BANDWIDTH):
+                    for _ in range(sigopt_parallel_bandwidth):
                         experiments.append(Experiment(
                             experiment_name=experiment_name,
                             model_name=model,
-                            output_folder=OUTPUT_FOLDER,
+                            output_folder=output_folder,
                             input_folder=dataset,
-                            epochs=EPOCHS,
+                            epochs=epochs,
                             init=init,
                             additional=additional
                         ))
         return experiments
 
-    @staticmethod
-    def build_variance_combinations():
-        conn = Connection(client_token=SIGOPT_TOKEN)
-        conn.set_api_url("https://api.sigopt.com")
-
-        # Fetch all experiments
-        sigopt_list = []
-        for experiment in conn.experiments().fetch().iterate_pages():
-            sigopt_list.append(experiment)
-
-        experiments = []
-        for dataset in DATASETS:
-            for model in MODELS:
-                for (init, experiment_id, extra) in RUNS:
-                    experiment_name = EXPERIMENT_NAME_PREFIX + '_' + init + '_' + Path(dataset).stem
-                    best_parameters = ExperimentsBuilder._get_best_parameters(
-                        conn, sigopt_list, [experiment_name]
-                    )
-                    for i in range(RUNS_PER_VARIANCE):
-                        experiments.append(Experiment(
-                            experiment_name=f"multi_" + experiment_name,
-                            model_name=model,
-                            output_folder=OUTPUT_FOLDER,
-                            input_folder=dataset,
-                            epochs=EPOCHS,
-                            init=init,
-                            additional=(
-                                f"{extra} "
-                                f"--wandb-project sigopt_" + EXPERIMENT_NAME_PREFIX + f"_{Path(dataset).stem} "       
-                                f"-j {ExperimentsBuilder.num_workers():d} "                                                                                         
-                                f"{' '.join(['--' + k + ' ' + str(v) for k, v in best_parameters.items()])}"
-                            )
-                        ))
-        return experiments
-
-    @staticmethod
-    def num_workers() -> int:
-        # 'max_' here is meant as "running at the same time"
-        max_allowed = len(NUM_GPUs) * PROCESSES_PER_GPU
-        max_needed = len(DATASETS) * len(MODELS) * len(RUNS) * SIGOPT_PARALLEL_BANDWIDTH
-        return int(np.floor(CPU_CORES / np.min([max_allowed, max_needed])))
+    # @staticmethod
+    # def build_variance_combinations():
+    #     conn = Connection(client_token=SIGOPT_TOKEN)
+    #     conn.set_api_url("https://api.sigopt.com")
+    #
+    #     # Fetch all experiments
+    #     sigopt_list = []
+    #     for experiment in conn.experiments().fetch().iterate_pages():
+    #         sigopt_list.append(experiment)
+    #
+    #     experiments = []
+    #     for dataset in DATASETS:
+    #         for model in MODELS:
+    #             for (init, experiment_id, extra) in RUNS:
+    #                 experiment_name = EXPERIMENT_NAME_PREFIX + '_' + init + '_' + Path(dataset).stem
+    #                 best_parameters = ExperimentsBuilder._get_best_parameters(
+    #                     conn, sigopt_list, [experiment_name]
+    #                 )
+    #                 for i in range(RUNS_PER_VARIANCE):
+    #                     experiments.append(Experiment(
+    #                         experiment_name=f"multi_" + experiment_name,
+    #                         model_name=model,
+    #                         output_folder=OUTPUT_FOLDER,
+    #                         input_folder=dataset,
+    #                         epochs=EPOCHS,
+    #                         init=init,
+    #                         additional=(
+    #                             f"{extra} "
+    #                             f"--wandb-project sigopt_{EXPERIMENT_NAME_PREFIX}_{Path(dataset).stem} "
+    #                             f"-j {ExperimentsBuilder.num_workers():d} "
+    #                             f"{' '.join(['--' + k + ' ' + str(v) for k, v in best_parameters.items()])} "
+    #                         )
+    #                     ))
+    #     return experiments
 
     @staticmethod
     def _retrieve_id_by_name(sigopt_list, parts):
@@ -186,15 +227,16 @@ class ExperimentsBuilder(object):
 ##########################################################################
 class Experiment(object):
     def __init__(
-        self,
-        experiment_name : str,
-        model_name : str,
-        output_folder : str,
-        input_folder : str,
-        epochs : int ,
-        init : str,
-        additional : str,
-        gpu_index : int = None,
+            self,
+            experiment_name : str,
+            model_name : str,
+            output_folder : str,
+            input_folder : str,
+            epochs : int ,
+            init : str,
+            additional : str,
+            gpu_index : int = None,
+            cpu_list : str = None,
     ):
         self.experiment_name = experiment_name
         self.model_name = model_name
@@ -204,11 +246,15 @@ class Experiment(object):
         self.init = init
         self.additional = additional
         self.gpu_index = gpu_index
+        self.cpu_list = cpu_list
 
     def get_cmd(self):
-        cmd = (
+        cmd = ""
+        if self.cpu_list is not None:
+            cmd += f"taskset --cpu-list {self.cpu_list:s} "
+        cmd += (
             f"python template/RunMe.py --ignoregit --disable-dataset-integrity "
-            f"-rc ImageClassification --init --nesterov "            
+            f"-rc ImageClassification --init --nesterov "
             f"--experiment-name {self.experiment_name:s} "
             f"--model {self.model_name:s} "
             f"--output-folder {self.output_folder:s} "
@@ -230,32 +276,52 @@ class Experiment(object):
 # Running Experiments
 ##########################################################################
 class ExperimentProcess(Process):
-    def __init__(self, queue, gpu_idx):
+    def __init__(self, queue, gpu_index, cpu_list):
         super().__init__()
-        self.gpu_index = gpu_idx
         self.queue = queue
+        self.gpu_index = gpu_index
+        self.cpu_list = cpu_list
 
     def run(self):
         while not self.queue.empty():
             experiment = self.queue.get()
             experiment.gpu_index = self.gpu_index
+            experiment.cpu_list = self.cpu_list
             os.system(experiment.get_cmd())
 
+    @staticmethod
+    def num_workers() -> int:
+        # 'max_' here is meant as "running at the same time"
+        max_allowed = len(NUM_GPUs) * PROCESSES_PER_GPU
+        max_needed = len(DATASETS) * len(MODELS) * len(RUNS) * SIGOPT_PARALLEL_BANDWIDTH
+        return int(np.floor(CPU_CORES / np.min([max_allowed, max_needed])))
 
-def run_experiments(number_gpus, processes_per_gpu, queue):
+    @staticmethod
+    def list_cpus(index) -> str:
+        workers = ExperimentProcess.num_workers()
+        start_index = index * workers
+        if start_index + workers > CPU_CORES:
+            raise EnvironmentError(
+                f"Attempt to allocate more cores ({start_index + workers}) than available ({CPU_CORES})."
+            )
+        return ",".join([str(x) for x in list(range(start_index, start_index + workers))])
+
+
+##########################################################################
+def run_experiments(gpu_indexes, processes_per_gpu, queue):
     processes = []
+    i = 0
     for _ in range(processes_per_gpu):
-        for gpu in number_gpus:
-            process = ExperimentProcess(queue=queue, gpu_idx=gpu)
+        for gpu_index in gpu_indexes:
+            cpu_list = ExperimentProcess.list_cpus(index=i)
+            process = ExperimentProcess(queue=queue, gpu_index=gpu_index, cpu_list=cpu_list)
             process.start()
             processes.append(process)
-            if SIGOPT_PARALLEL_BANDWIDTH > 1:
-                # Avoid that all the processes starts together
-                time.sleep(30)
+            i += 1
     for p in processes:
         p.join()
 
-
+##########################################################################
 if __name__ == '__main__':
 
     # Init queue item
@@ -263,7 +329,20 @@ if __name__ == '__main__':
 
     print("sigopt...")
     experiments = []
-    experiments.extend(ExperimentsBuilder.build_sigopt_combinations())
+    experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
+        experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
+        datasets=DATASETS,
+        models=MODELS,
+        runs=RUNS,
+        multi_run=MULTI_RUN,
+        epochs=EPOCHS,
+        output_folder=OUTPUT_FOLDER,
+        sigopt_token=SIGOPT_TOKEN,
+        sigopt_file=SIGOPT_FILE,
+        sigopt_project=SIGOPT_PROJECT,
+        sigopt_runs=SIGOPT_RUNS,
+        sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
+    ))
     [queue.put(e) for e in experiments]
     run_experiments(NUM_GPUs, PROCESSES_PER_GPU, queue)
 
