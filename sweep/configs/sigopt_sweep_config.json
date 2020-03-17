@@ -3,7 +3,7 @@
         "name": "weight-decay",
         "type": "double",
         "precision": 5,
-        "bounds": {"max": 0.005, "min": 0.0}
+        "bounds": {"max": 0.004, "min": 0.0}
     },
     {
         "name": "lr",
