@@ -12,11 +12,11 @@ from sigopt import Connection
 from template.RunMe import RunMe
 
 # Init SigOpt Paramters ##################################################
-SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-#SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+# SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
+SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_sweep_config.json"
 SIGOPT_PROJECT = "init"
-SIGOPT_PARALLEL_BANDWIDTH = 2
+SIGOPT_PARALLEL_BANDWIDTH = 3
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
@@ -31,7 +31,7 @@ EXPERIMENT_NAME_PREFIX = "final"
 EPOCHS = 50 # For CB55 is /10
 SIGOPT_RUNS = 150 # 150 # 10+ * num of parameters to optimize usually
 RUNS_PER_VARIANCE = 5
-PROCESSES_PER_GPU = 2
+PROCESSES_PER_GPU = 3
 
 
 ##########################################################################
@@ -54,15 +54,16 @@ DATASETS = [
 ]
 
 RUNS = [
-    ("random",          None, ""),
-    ("pure_lda",        None, ""),
-    ("mirror_lda",      None, ""),
-    ("highlander_lda",  None, ""),
-    ("pure_pca",        None, ""),
-    ("pcdisc",          None, ""),
-    ("lpca",            None, ""),
-    # ("reverse_pca", None, ""),
-    ("relda",           None, ""),
+    ("pure_lda", None, ""),
+    # ("random",          171185, ""),
+    # ("pure_lda",        171186, ""),
+    # ("mirror_lda",      171187, ""),
+    # ("highlander_lda",  171188, ""),
+    # ("pure_pca",        171189, ""),
+    # ("pcdisc",          171190, ""),
+    # ("lpca",            171191, ""),
+    # # ("reverse_pca", None, ""),
+    # ("relda",           171192, ""),
 ]
 
 ##########################################################################
@@ -88,6 +89,12 @@ class ExperimentsBuilder(object):
                             experiment_name=experiment_name,
                             minimize_best_epoch=True
                         )
+
+                    # Delete open suggestions if any
+                    conn = Connection(client_token=SIGOPT_TOKEN)
+                    experiment = conn.experiments(experiment_id).fetch()
+                    conn.experiments(experiment.id).suggestions().delete(state="open")
+
                     # Setup the additional parameters (not default ones)
                     additional = (
                         f"{extra} "
@@ -107,7 +114,7 @@ class ExperimentsBuilder(object):
                             input_folder=dataset,
                             epochs=EPOCHS,
                             init=init,
-                            additional = additional
+                            additional=additional
                         ))
         return experiments
 
