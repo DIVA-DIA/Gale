@@ -71,7 +71,7 @@ class BaseRunner(AbstractRunner):
             except Exception as exp:
                 logging.error('Unhandled error: %s' % repr(exp))
                 logging.error(traceback.format_exc())
-                logging.error('Train routine ended with errors :(')
+                logging.error('Test routine ended with errors :(')
                 # Experimental return value to be resilient in case of error while being in a SigOpt optimization
                 multi_run_label = f"_{kwargs['run']}" if 'run' in kwargs else ""
                 TBWriter().add_scalar(tag='test/accuracy' + multi_run_label, scalar_value=-1.0)
@@ -275,10 +275,10 @@ class BaseRunner(AbstractRunner):
             kwargs["load_model"] = os.path.join(current_log_folder, 'checkpoint.pth')
         elif kwargs["load_model"] is not None:
             if not os.path.exists(kwargs["load_model"]):
-                raise SystemExit(f"Could not find model {kwargs['load_model']}. Terminating.")
+                raise Exception(f"Could not find model {kwargs['load_model']}")
         else:
-            raise SystemExit(f'Both best.pth and checkpoint.pth are not not found in'
-                             f' {current_log_folder}. No --load-model provided -> Terminating.')
+            raise Exception(f'Both best.pth and checkpoint.pth are not not found in'
+                             f' {current_log_folder}. No --load-model provided.')
 
         model = self.setup.setup_model(**kwargs)
 
