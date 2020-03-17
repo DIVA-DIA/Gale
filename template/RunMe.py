@@ -209,6 +209,8 @@ class RunMe:
                     "value": float(np.round(np.mean(indexes))),
                     "value_stddev": float(np.std(indexes))
                 })
+                TBWriter().add_scalar(tag='test/best_epoch', scalar_value=float(np.round(np.mean(indexes))))
+                TBWriter().add_scalar(tag='test/best_epoch_std', scalar_value=float(np.std(indexes)))
 
             # Report the observation
             conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, values=values)
