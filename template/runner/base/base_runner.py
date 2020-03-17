@@ -233,8 +233,7 @@ class BaseRunner(AbstractRunner):
             logging.info('Training done')
             return train_value, val_value
 
-    def test_routine(self, model,  criterion, epochs, current_log_folder,
-                     **kwargs):
+    def test_routine(self, model, epochs, current_log_folder, run, **kwargs):
         """
         Load the best model according to the validation score (early stopping) and runs the test routine.
 
@@ -242,38 +241,41 @@ class BaseRunner(AbstractRunner):
         ----------
         model : DataParallel
             The model to train
-        criterion : torch.nn.modules.loss
-            Loss function to use, e.g. cross-entropy
         epochs : int
             After how many epochs are we testing
         current_log_folder : string
             Path to where logs/checkpoints are saved
+        run : int
+            Number of run, used in multi-run context to discriminate the different runs
 
         Returns
         -------
         test_value : float
             Accuracy value for test split, -1 if an error occurred
         """
+        # 'run' is injected in kwargs at runtime in RunMe.py IFF it is a multi-run event
+        multi_run_label = f"_{run}" if run is not None else ""
+
         test_value = -1.0
         try:
             # Load the best model before evaluating on the test set (early stopping)
-            if os.path.exists(os.path.join(current_log_folder, 'best.pth')):
+            if os.path.exists(os.path.join(current_log_folder, f'best{multi_run_label}.pth')):
                 logging.info('Loading the best model before evaluating on the test set.')
-                kwargs["load_model"] = os.path.join(current_log_folder, 'best.pth')
-            elif os.path.exists(os.path.join(current_log_folder, 'checkpoint.pth')):
-                logging.warning('File model_best.pth.tar not found in {}'.format(current_log_folder))
-                logging.warning('Using checkpoint.pth.tar instead')
-                kwargs["load_model"] = os.path.join(current_log_folder, 'checkpoint.pth')
+                kwargs["load_model"] = os.path.join(current_log_folder, f'best{multi_run_label}.pth')
+            elif os.path.exists(os.path.join(current_log_folder, f'checkpoint{multi_run_label}.pth')):
+                logging.warning(f'File model_best.pth.tar not found in {current_log_folder}')
+                logging.warning(f'Using checkpoint{multi_run_label}.pth.tar instead')
+                kwargs["load_model"] = os.path.join(current_log_folder, f'checkpoint{multi_run_label}.pth')
             elif kwargs["load_model"] is not None:
                 if not os.path.exists(kwargs["load_model"]):
                     raise Exception(f"Could not find model {kwargs['load_model']}")
             else:
-                raise Exception(f'Both best.pth and checkpoint.pth are not not found in'
-                                 f' {current_log_folder}. No --load-model provided.')
+                raise Exception(f'Both best{multi_run_label}.pth and checkpoint{multi_run_label}.pth are not not '
+                                f'found in {current_log_folder}. No --load-model provided.')
             # Load the model
             model = self.setup.setup_model(**kwargs)
             # Test
-            test_value = self._test(model=model, criterion=criterion, epoch=epochs - 1, **kwargs)
+            test_value = self._test(model=model, epoch=epochs - 1, run=run, **kwargs)
 
         except Exception as exp:
             logging.error('Unhandled error: %s' % repr(exp))

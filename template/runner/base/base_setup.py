@@ -612,7 +612,16 @@ class BaseSetup:
     ################################################################################################
     # Checkpointing handling
     @classmethod
-    def checkpoint(cls, epoch, new_value, best_value, log_dir, the_lower_the_better=None, checkpoint_all_epochs=False, **kwargs):
+    def checkpoint(
+            cls,
+            epoch,
+            new_value,
+            best_value,
+            log_dir,
+            the_lower_the_better=None,
+            checkpoint_all_epochs=False,
+            run=None,
+            **kwargs):
         """Saves the current training checkpoint and the best valued checkpoint to file.
 
         Parameters
@@ -631,26 +640,30 @@ class BaseSetup:
             Changes the scale such that smaller values are better than bigger values
             (useful when metric evaluted is error rate)
         checkpoint_all_epochs : bool
-            If enabled, save checkpoint after every epoch.
-        kwargs : dict
-            Any additional arguments.
+            If enabled, save checkpoint after every epoch
+        run : int
+            Number of run, used in multi-run context to discriminate the different runs
+
         Returns
         -------
         best_value : float
             Best value ever obtained.
 
         """
+        # 'run' is injected in kwargs at runtime in RunMe.py IFF it is a multi-run event
+        multi_run_label = f"_{run}" if run is not None else ""
+
         is_best = new_value > best_value if not the_lower_the_better else new_value < best_value
         best_value = new_value if is_best else best_value
 
-        filename = os.path.join(log_dir, 'checkpoint.pth')
+        filename = os.path.join(log_dir, f'checkpoint{multi_run_label}.pth')
         torch.save(cls._serialize_dict(epoch=epoch, best_value=best_value, **kwargs), filename)
         if is_best:
-            shutil.copyfile(filename, os.path.join(log_dir, 'best.pth'))
+            shutil.copyfile(filename, os.path.join(log_dir, f'best{multi_run_label}.pth'))
 
         # If enabled, save all checkpoints with epoch number.
         if checkpoint_all_epochs:
-            shutil.move(filename, os.path.join(log_dir, f'checkpoint_{epoch}.pth.tar'))
+            shutil.move(filename, os.path.join(log_dir, f'checkpoint_{epoch}{multi_run_label}.pth.tar'))
         return best_value
 
     @classmethod
