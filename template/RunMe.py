@@ -221,8 +221,8 @@ class RunMe:
             sigopt_token,
             sigopt_file,
             sigopt_project,
-            sigopt_runs,
             sigopt_parallel_bandwidth,
+            sigopt_runs=None,
             sigopt_conditionals_file=None,
             minimize_best_epoch=True,
             **kwargs
@@ -238,13 +238,14 @@ class RunMe:
         sigopt_token : str
             SigOpt API token
         sigopt_file : str
-            Path to a JSON file containing sig_opt variables and sig_opt bounds.
-        sigopt_runs : int
-            Number of updates of SigOpt required
+            Path to a JSON file containing sig_opt variables and sig_opt bounds
         sigopt_project : str
             SigOpt project name
         sigopt_parallel_bandwidth : int
             Number of concurrent parallel optimization running
+        sigopt_runs : int
+            Number of updates of SigOpt required. If None, then it is set as
+            10 * num of parameters to optimize + 10 buffer + 10 top performing
         sigopt_conditionals_file : str
             Path to a JSON file containing sigopt conditionals
         minimize_best_epoch : bool
@@ -258,12 +259,14 @@ class RunMe:
         assert sigopt_token is not None
         assert sigopt_file is not None
         assert sigopt_project is not None
-        assert sigopt_runs > 0
 
         conn = Connection(client_token=sigopt_token)
         # Load parameters from file
         with open(sigopt_file, 'r') as f:
             parameters = json.loads(f.read())
+        # Compute number of runs if not provided
+        if sigopt_runs is None:
+            sigopt_runs = len(parameters) * 10 + 20
 
         # Create the metrics for the experiments
         metrics = [{
