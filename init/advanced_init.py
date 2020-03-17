@@ -693,12 +693,81 @@ def pure_pca(
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+
     ##################################################################
     # Last layer
     else:
         # Init W and B with the default values
         W = module.weight.data.cpu().numpy()
         B = module.bias.data.cpu().numpy()
+
+    return torch.from_numpy(W), torch.from_numpy(B)
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def pcdisc(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    **kwargs
+):
+    """Initialize the layer with pure PCA and the final layer with linear discriminants
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+
+    ##################################################################
+    # All layers but the last one
+    if layer_index < network_depth:
+        logging.info('PCA Transform')
+        W, B = pca.transform(init_input)
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
+
+    ##################################################################
+    # Last layer
+    else:
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
