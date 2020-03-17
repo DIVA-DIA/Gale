@@ -217,13 +217,13 @@ class RunMe:
     @classmethod
     def create_sigopt_experiment(
             cls,
+            experiment_name,
             sigopt_token,
             sigopt_file,
             sigopt_project,
             sigopt_runs,
             sigopt_parallel_bandwidth,
-            sigopt_conditionals_file,
-            experiment_name,
+            sigopt_conditionals_file=None,
             minimize_best_epoch=True,
             **kwargs
     ):
@@ -233,6 +233,8 @@ class RunMe:
 
         Parameters
         ----------
+        experiment_name : string
+            Name of the experiment. If not specify, accepted from command line
         sigopt_token : str
             SigOpt API token
         sigopt_file : str
@@ -245,8 +247,6 @@ class RunMe:
             Number of concurrent parallel optimization running
         sigopt_conditionals_file : str
             Path to a JSON file containing sigopt conditionals
-        experiment_name : string
-            Name of the experiment. If not specify, accepted from command line
         minimize_best_epoch : bool
             Flag for minimizing the occurrence of the epoch where the best validation accuracy is achieved
 
