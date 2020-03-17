@@ -361,24 +361,21 @@ class RunMe:
 
         # Run the actual experiment
         start_time = time.time()
-        try:
-            if multi_run is not None:
-                return_value = cls._multi_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
-            else:
+        if multi_run is not None:
+            return_value = cls._multi_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
+        else:
+            try:
                 return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
-            logging.info(f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}')
-        except Exception as exp:
-            if quiet:
-                print('Unhandled error: {}'.format(repr(exp)))
-            logging.error('Unhandled error: %s' % repr(exp))
-            logging.error(traceback.format_exc())
-            logging.error('Execution finished with errors :(')
-        finally:
-            # Free logging resources
-            logging.shutdown()
-            logging.getLogger().handlers = []
-            TBWriter().close()
-            print('Execution done! (Log files at {} )'.format(current_log_folder))
+            except Exception as exp:
+                return_value = cls._log_failure(exp, **kwargs)
+                TBWriter().add_scalar(tag='test/accuracy', scalar_value=return_value['test'])
+            finally:
+                # Free logging resources
+                logging.shutdown()
+                logging.getLogger().handlers = []
+                TBWriter().close()
+        logging.info(f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}')
+        print('Execution done! (Log files at {} )'.format(current_log_folder))
         return return_value
 
     @classmethod
@@ -454,23 +451,28 @@ class RunMe:
         """
 
         # Instantiate the scores tables which will stores the results.
-        train_scores = np.zeros((multi_run, epochs))
-        val_scores = np.zeros((multi_run, epochs + 1))
-        test_scores = np.zeros(multi_run)
+        train_all = np.zeros((multi_run, epochs))
+        val_all = np.zeros((multi_run, epochs + 1))
+        test_all = np.zeros(multi_run)
 
         # As many times as runs
         for i in range(multi_run):
             logging.info('Multi-Run: {} of {}'.format(i + 1, multi_run))
-            return_value = runner_class().single_run(run=i,
-                                                    current_log_folder=current_log_folder,
-                                                    multi_run=multi_run,
-                                                    epochs=epochs,
-                                                    **kwargs)
-            train_scores[i, :], val_scores[i, :], test_scores[i] = (return_value['train'], return_value['val'], return_value['test'])
+            try:
+                return_value = runner_class().single_run(
+                    run=i,
+                    current_log_folder=current_log_folder,
+                    multi_run=multi_run,
+                    epochs=epochs,
+                    **kwargs
+                )
+            except Exception as exp:
+                return_value = cls._log_failure(exp, epochs)
 
+            train_all[i, :], val_all[i, :], test_all[i] = (return_value['train'], return_value['val'], return_value['test'])
 
-            # Generate and add to tensorboard the shaded plot for train
-            train_curve = plot_mean_std(arr=train_scores[:i + 1],
+            # Generate and add to TB the shaded plot for train
+            train_curve = plot_mean_std(arr=train_all[:i + 1],
                                         suptitle='Multi-Run: Train',
                                         title='Runs: {}'.format(i + 1),
                                         xlabel='Epoch', ylabel='Score',
@@ -478,9 +480,9 @@ class RunMe:
             TBWriter().save_image(tag='train_curve', image=train_curve, global_step=i)
             logging.info('Generated mean-variance plot for train')
 
-            # Generate and add to tensorboard the shaded plot for va
+            # Generate and add to TB the shaded plot for va
             val_curve = plot_mean_std(x=(np.arange(epochs + 1) - 1),
-                                      arr=np.roll(val_scores[:i + 1], axis=1, shift=1),
+                                      arr=np.roll(val_all[:i + 1], axis=1, shift=1),
                                       suptitle='Multi-Run: Val',
                                       title='Runs: {}'.format(i + 1),
                                       xlabel='Epoch', ylabel='Score',
@@ -489,14 +491,22 @@ class RunMe:
             logging.info('Generated mean-variance plot for val')
 
         # Log results on disk
-        np.save(os.path.join(current_log_folder, 'train_values.npy'), train_scores)
-        np.save(os.path.join(current_log_folder, 'val_values.npy'), val_scores)
-        logging.info('Multi-run values for test-mean:{} test-std: {}'.format(np.mean(test_scores), np.std(test_scores)))
+        np.save(os.path.join(current_log_folder, 'train_values.npy'), train_all)
+        np.save(os.path.join(current_log_folder, 'val_values.npy'), val_all)
+        logging.info('Multi-run values for test-mean:{} test-std: {}'.format(np.mean(test_all), np.std(test_all)))
         # Log results on TB
-        TBWriter().add_scalar(tag='test/accuracy', scalar_value=np.mean(test_scores))
-        TBWriter().add_scalar(tag='test/accuracy_std', scalar_value=np.std(test_scores))
+        TBWriter().add_scalar(tag='test/accuracy', scalar_value=np.mean(test_all))
+        TBWriter().add_scalar(tag='test/accuracy_std', scalar_value=np.std(test_all))
 
-        return {'train': train_scores, 'val': val_scores, 'test': test_scores}
+        return {'train': train_all, 'val': val_all, 'test': test_all}
+
+    @classmethod
+    def _log_failure(cls, exp, epochs, **kwargs):
+        logging.error('Unhandled error: %s' % repr(exp))
+        logging.error(traceback.format_exc())
+        logging.error('Execution finished with errors :(')
+        # Experimental return value to be resilient in case of error while being in a SigOpt optimization
+        return {'train': np.ones(epochs) * -2, 'val': np.ones(epochs + 1) * -2, 'test': -2}
 
     ####################################################################################################################
     @classmethod
