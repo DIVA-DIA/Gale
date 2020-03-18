@@ -12,9 +12,9 @@
         "bounds": {"max": 0.03, "min": 0.0003}
     },
     {
-        "name": "num-samples",
+        "name": "patches-cap",
         "type": "int",
-        "bounds": {"max": 50000, "min": 100}
+        "bounds": {"max": 500000, "min": 500}
     },
     {
         "name": "conv-normalize",
@@ -28,6 +28,11 @@
     },
     {
         "name": "conv-scale",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "lin-normalize",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
     },
