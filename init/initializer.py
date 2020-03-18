@@ -21,7 +21,7 @@ from init import advanced_init
 from template.runner.base.base_routine import BaseRoutine
 
 
-def init_model(model, data_loader, num_samples, init_function, max_patches, **kwargs):
+def init_model(model, data_loader, init_function, **kwargs):
     """
     Initialize a standard CNN composed by convolutional layer followed by fully
     connected layers.
@@ -32,22 +32,14 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
         The model to initialize
     data_loader : torch.utils.data.dataloader.DataLoader
         The dataloader to take the data from
-    num_samples : int
-        Specifies how many points should be used to compute the data-driven
-        initialization
     init_function : string
         Name of the function to use to init the model
-    max_patches : int or double [0:0.99]
-        Number of patches to extract. Exact if int, ratio of all possible patches if double.
     """
-    # Collect initial data
-    logging.info(f'Collect initial data #samples={num_samples}')
-    X, y = _collect_initial_data(data_loader, num_samples)
-
     if 'random' in init_function:
-        # Save time and space
-        num_samples = 1
-        max_patches = 1
+       return
+
+    # Collect initial data
+    X, y = _collect_initial_data(data_loader=data_loader, **kwargs)
 
     ###############################################################################################
     # Iterate over all layers
@@ -75,14 +67,8 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
         # CONV LAYER
         if type(module) is nn.Conv2d:
             compute_parameters = True
-            # Get kernel size of current layer
-            kernel_size = module.kernel_size
-            # Fix max patches if is not a ratio
-            if max_patches > 1.0:
-                max_patches = int(max_patches)
-            logging.info(f'Get {max_patches} patches of kernel size {kernel_size} from {num_samples} samples')
             # Get the patches in a matrix form
-            init_input, init_labels = get_patches(X=X, y=y, kernel_size=kernel_size, max_patches=max_patches)
+            init_input, init_labels = get_patches(X=X, y=y, kernel_size=module.kernel_size, **kwargs)
 
         # LINEAR LAYER
         if type(module) is nn.Linear:
@@ -134,7 +120,7 @@ def init_model(model, data_loader, num_samples, init_function, max_patches, **kw
     pass
 
 
-def _collect_initial_data(data_loader, num_samples):
+def _collect_initial_data(data_loader, num_samples, **kwargs):
     """Randomly samples the training set with the number of samples requested
     The precision of the number of samples collected is data_loader.batch_size: so one either gets the exact num_samples
     value of that plus at most data_loader.batch_size - 1 samples.
@@ -162,6 +148,10 @@ def _collect_initial_data(data_loader, num_samples):
     y : list(IntTensor)
         Target samples structured in batches (corresponding to X input samples)
     """
+    # If not specified take the entire dataset
+    if num_samples is None:
+        num_samples = len(data_loader.dataset)
+        
     X = []
     y = []
     # This is necessary because last batches might not have size mini-batch but smaller!
@@ -223,7 +213,7 @@ def minibatches_to_matrix(A):
     return A
 
 
-def get_patches(X, y, kernel_size, max_patches):
+def get_patches(X, y, kernel_size, patches_cap, **kwargs):
     """
     Extract patches out of a set X of tensors passed as parameter. Additionally returns the relative set of labels
     corresponding to each patch
@@ -236,8 +226,8 @@ def get_patches(X, y, kernel_size, max_patches):
         Target samples structured in batches (corresponding to X input samples)
     kernel_size: tuple(width,height)
         size of the kernel to use to extract the patches.
-    max_patches : int or double [0:0.99]
-        number of patches to extract. Exact if int, ratio of all possible patches if double.
+    patches_cap : int
+        Upper bound on the number of patches to extract.
 
     Returns
     -------
@@ -250,9 +240,22 @@ def get_patches(X, y, kernel_size, max_patches):
     tmp_X = np.array([e.data.numpy() for minibatch in X for e in minibatch])
     tmp_y = minibatches_to_matrix(y)
 
+    # Compute the total amount of possible patches to be extracted from one sample
+    possible_patches_per_sample = (tmp_X.shape[2] - kernel_size[0] + 1) * (tmp_X.shape[3] - kernel_size[1] + 1)
+    # Set max_patches accordingly in order to either meet the cap or take all the samples
+    num_samples = len(tmp_y)
+    if patches_cap >= possible_patches_per_sample * num_samples:
+        max_patches = possible_patches_per_sample
+    else:
+        max_patches = int(np.max((np.round(patches_cap / num_samples), 1)))  # At least one patch per sample
+
+    logging.info(
+        f'Get {max_patches} patches of kernel size {kernel_size}'
+        f' from {num_samples} samples of size ({tmp_X.shape[1]}x{tmp_X.shape[2]}x{tmp_X.shape[3]})'
+    )
+
     # Init the return values
     all_patches, all_labels = [], []
-
     # For all images in X
     for image, label in zip(tmp_X, tmp_y):
         # Transform the image in the right format for extract_patches_2d(). Needed as channels are not in same order
@@ -281,4 +284,5 @@ def get_patches(X, y, kernel_size, max_patches):
     assert all_patches.shape[0] == len(extracted_patches) * len(tmp_X)
     assert all_patches.shape[1] == kernel_size[0] * kernel_size[1] * X[0].shape[1]  # X[0].shape[1] is the num channels
 
+    logging.info(f'Got {len(all_labels)} patches')
     return all_patches, all_labels
