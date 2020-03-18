@@ -282,7 +282,6 @@ class BaseRunner(AbstractRunner):
             logging.error(traceback.format_exc())
             logging.error('Test routine ended with errors :(')
             # Experimental return value to be resilient in case of error while being in a SigOpt optimization
-            multi_run_label = f"_{kwargs['run']}" if 'run' in kwargs else ""
             TBWriter().add_scalar(tag='test/accuracy' + multi_run_label, scalar_value=test_value)
         finally:
             logging.info(f'Test: {test_value}')
