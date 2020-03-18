@@ -1065,3 +1065,166 @@ def relda(
         W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def greedya(
+    layer_index,
+    init_input,
+    init_labels,
+    model,
+    module,
+    conv_normalize,
+    conv_standardize,
+    conv_scale,
+    lin_normalize,
+    lin_standardize,
+    lin_scale,
+    **kwargs
+):
+    """
+
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+
+    ##################################################################
+    # All layers but the last one
+    if layer_index < network_depth:
+        logging.info('Highlander LDA Transform')
+        classes = np.unique(init_labels)
+
+        # Check if size of model allows (has enough neurons)
+        if module.weight.shape[0] < len(classes) * 2:
+            logging.error(
+                f"Model does not have enough neurons. Expected at least |C|*2 got {module.weight.shape[0]}"
+            )
+            sys.exit(-1)
+
+        # Init W with the default values
+        # W = _flatten_conv_filters(module.weight.data.cpu().numpy())
+        W = np.zeros_like(_flatten_conv_filters(module.weight.data.cpu().numpy()))
+        start_index = 0
+
+        # ----------------------------------------------------------------------------------------------
+        # LDA Original
+        logging.info('Original LDA Transform')
+        w, b = lda.transform(X=init_input, y=init_labels, **kwargs)
+        w, B = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W[:, start_index:w.shape[1]] = w
+        start_index += w.shape[1]
+
+        # ----------------------------------------------------------------------------------------------
+        logging.info('Highlander LDA')
+        assert kwargs['solver'] == 'svd'
+        # |C| times
+        for i, l in enumerate(classes):
+            logging.info(f'Highlander, class {l}')
+            # Make a new set of labels of 1 vs ALL
+            tmp_labels = init_labels.copy()
+            tmp_labels[np.where(init_labels == l)] = 0
+            tmp_labels[np.where(init_labels != l)] = 1
+            w, b = lda.transform(X=init_input, y=tmp_labels, **kwargs)
+            # Adapt the size of the weights
+            w, b = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+            W[:, start_index:start_index + 1] = w
+            start_index += 1
+
+        # ----------------------------------------------------------------------------------------------
+        logging.info('ReLDA')
+        # Compute available columns per iteration
+        available_columns_per_iteration = len(classes) - 1
+        # Compute number of iterations
+        N = int((module.weight.shape[0] - start_index) / available_columns_per_iteration)
+        # Leave some room for PCA, if there is some
+        if N > 4:
+            N -= 2
+
+        # N times
+        tmp_input = init_input.copy()
+        tmp_labels = init_labels.copy()
+        clf = LinearDiscriminantAnalysis(solver=kwargs['solver'])
+        initial_size = len(init_input)
+        for i in range(N):
+            logging.info(f'Iteration {i + 1} of {N} #samples={len(tmp_input)}')
+            if len(tmp_input) < 1:
+                logging.info('No more wrong samples -> exiting loop')
+                break
+            if len(tmp_input) == len(np.unique(tmp_labels)):
+                logging.info('Number of samples is equal to the number of classes -> exiting loop')
+                break
+            logging.info(f'\tfitting...')
+            clf.fit(X=tmp_input, y=tmp_labels)
+            w = -clf.scalings_
+            b = np.mean(tmp_input, axis=0)
+            # Adapt the size of the weights
+            w, b = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+
+            # Filter the input data with the wrong predictions i.e. keep those location where it is WRONGLY predicted
+            logging.info(f'\tpredicting...')
+            predictions = clf.predict(tmp_input)
+            locs = np.where(predictions != tmp_labels)
+            logging.info(f'\tcurrent acc={1 - float(len(locs[0])) / len(tmp_input):.2f} ...')
+            tmp_input = tmp_input[locs]
+            tmp_labels = tmp_labels[locs]
+            logging.info(f'\tglobal integrated acc={(initial_size - len(tmp_input)) / initial_size:.2f} ...')
+
+            # Set main weights
+            W[:, start_index:start_index + w.shape[1]] = w  # w could be smaller than |C|-1 as the init samples shrink
+            start_index += w.shape[1]
+
+        # ----------------------------------------------------------------------------------------------
+        # PCA Part
+        logging.info('PCA Transform')
+        p, c = pca.transform(init_input)
+        p, c = _adapt_magnitude(w=p, b=c, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+
+        # Compute available columns
+        available_columns = module.weight.shape[0] - start_index
+
+        # Add PCA columns in the second part
+        W[:, start_index:] = p[:, 0:available_columns]
+        start_index += available_columns
+
+        # ----------------------------------------------------------------------------------------------
+
+        # Adapt the size of the weights
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
+
+    ##################################################################
+    # Last layer
+    else:
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+
+    return torch.from_numpy(W), torch.from_numpy(B)
