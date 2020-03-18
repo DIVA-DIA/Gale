@@ -191,7 +191,7 @@ class RunMe:
             # Get indexes of highest values
             indexes = np.argmax(val, axis=1)
             # Select the highest values
-            scores = val[np.arange(val.shape[0])]
+            scores = val[np.arange(val.shape[0]), indexes]
 
             # Compute the averaged value and std of the runs (if multi_run is None then is a single value)
             values = [{
