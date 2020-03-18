@@ -15,7 +15,7 @@ SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_final_config.json"
 SIGOPT_PROJECT = "init"
-SIGOPT_PARALLEL_BANDWIDTH = 4
+SIGOPT_PARALLEL_BANDWIDTH = 6
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
@@ -27,7 +27,7 @@ OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/o
 
 # Experiment Parameters ##################################################
 EXPERIMENT_NAME_PREFIX = "final"
-EPOCHS = 50 # For CB55 is /10
+EPOCHS = 100 # For CB55 is /5
 SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = 5
 # RUNS_PER_VARIANCE = 5
@@ -43,12 +43,12 @@ MODELS = [
 ]
 
 DATASETS = [
-    # SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55",
+    # SERVER_PREFIX + "/dataset/DIVA-HisDB/CB55",
     # SERVER_PREFIX + "/dataset/HAM10000",
     # SERVER_PREFIX + "/dataset/CIFAR10",
-    SERVER_PREFIX + "/dataset/CINIC10",
+    # SERVER_PREFIX + "/dataset/CINIC10",
     # SERVER_PREFIX + "/dataset/ColorectalHist",
-    # SERVER_PREFIX + "/dataset/Flowers",
+    SERVER_PREFIX + "/dataset/Flowers",
     # SERVER_PREFIX + "/dataset/ImageNet",
     # SERVER_PREFIX + "/dataset/signatures/GPDS-last100/genuine",
 ]
@@ -56,13 +56,14 @@ DATASETS = [
 RUNS = [
     ("random",          None, ""),
     ("pure_lda",        None, ""),
-    ("mirror_lda",      None, ""),
-    ("highlander_lda",  None, ""),
+    # ("mirror_lda",      None, ""),
+    # ("highlander_lda",  None, ""),
     ("pure_pca",        None, ""),
     ("pcdisc",          None, ""),
-    ("lpca",            None, ""),
+    # ("lpca",            None, ""),
+    ("greedya",         None, ""),
     # ("reverse_pca", None, ""),
-    ("relda",           None, ""),
+    # ("relda",           None, ""),
 ]
 
 ##########################################################################
@@ -160,6 +161,7 @@ class ExperimentsBuilder(object):
                         f"-j {ExperimentProcess.num_workers():d} "
                         f"--multi-run {multi_run} "
                         f"--validation-interval 2 "
+                        f"--inmem "
                     )
 
                     # Create as many parallel one as required
@@ -169,7 +171,7 @@ class ExperimentsBuilder(object):
                             model_name=model,
                             output_folder=output_folder,
                             input_folder=dataset,
-                            epochs=epochs,
+                            epochs=int(epochs/5) if "CB55" in dataset else epochs,
                             init=init,
                             additional=additional
                         ))
@@ -251,7 +253,7 @@ class Experiment(object):
         self.model_name = model_name
         self.output_folder = output_folder
         self.input_folder = input_folder
-        self.epochs = int(epochs/10) if "CB55" in input_folder else epochs
+        self.epochs = epochs
         self.init = init
         self.additional = additional
         self.gpu_index = gpu_index
