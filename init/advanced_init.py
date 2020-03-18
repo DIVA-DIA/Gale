@@ -329,33 +329,6 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def random(
-    module,
-    **kwargs
-):
-    """Initialize the layer default values from the network. If left untouched, the default values are as follows:
-
-        https://pytorch.org/docs/stable/nn.html#linear-layers
-        https://pytorch.org/docs/stable/nn.html#convolution-layers
-
-    Parameters
-    ----------
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
-
-    Returns
-    -------
-    w : torch.Tensor
-        Weight matrix
-    b : torch.Tensor
-        Bias array
-    """
-    # Init W and B with the default values
-    W = module.weight.data.cpu().numpy()
-    B = module.bias.data.cpu().numpy() if module.bias is not None else np.zeros(module.weight.shape[0])
-    return torch.from_numpy(W), torch.from_numpy(B)
-
-
 def pure_lda(
     layer_index,
     init_input,
@@ -1122,7 +1095,7 @@ def greedya(
     ##################################################################
     # All layers but the last one
     if layer_index < network_depth:
-        logging.info('Highlander LDA Transform')
+        logging.info('Greedya Transform')
         classes = np.unique(init_labels)
 
         # Check if size of model allows (has enough neurons)
