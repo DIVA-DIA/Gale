@@ -1126,9 +1126,9 @@ def greedya(
         classes = np.unique(init_labels)
 
         # Check if size of model allows (has enough neurons)
-        if module.weight.shape[0] < len(classes) * 2:
+        if module.weight.shape[0] < len(classes) * 3:
             logging.error(
-                f"Model does not have enough neurons. Expected at least |C|*2 got {module.weight.shape[0]}"
+                f"Model does not have enough neurons. Expected at least |C|*3 got {module.weight.shape[0]}"
             )
             sys.exit(-1)
 
@@ -1138,11 +1138,11 @@ def greedya(
         start_index = 0
 
         # ----------------------------------------------------------------------------------------------
-        # LDA Original
-        logging.info('Original LDA Transform')
+        # Mirror LDA (note that the normal LDA is the first iteration of ReLDA
+        logging.info('Mirror LDA Transform')
         w, b = lda.transform(X=init_input, y=init_labels, **kwargs)
         w, B = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
-        W[:, start_index:w.shape[1]] = w
+        W[:, start_index:w.shape[1]] = -w
         start_index += w.shape[1]
 
         # ----------------------------------------------------------------------------------------------
