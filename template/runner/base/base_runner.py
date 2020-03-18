@@ -233,7 +233,7 @@ class BaseRunner(AbstractRunner):
             logging.info('Training done')
             return train_value, val_value
 
-    def test_routine(self, model, epochs, current_log_folder, run, **kwargs):
+    def test_routine(self, model, epochs, current_log_folder, run=None, **kwargs):
         """
         Load the best model according to the validation score (early stopping) and runs the test routine.
 
