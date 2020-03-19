@@ -117,7 +117,7 @@ class CLArguments(BaseCLArguments):
 
         parser_init.add_argument("--trim-lda",
                                  type=self.str2bool,
-                                 default="False",
+                                 default="True",
                                  help="Flag for trimming lda samples on last layer")
         parser_init.add_argument('--sn-ratio',
                                  type=int,
