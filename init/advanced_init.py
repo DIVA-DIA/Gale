@@ -238,7 +238,7 @@ def _basic_conv_procedure(w, b, module, sn_ratio, **kwargs):
     return w, b
 
 
-def _filter_points_trimlda(init_input, init_labels, solver, iterations=3, **kwargs):
+def _filter_points_trimlda(init_input, init_labels, solver, iterations=5, **kwargs):
     """Given a set of points with their label it fits an LDA classifier and predicts on them.
     Then, only the samples positively classified are returned. This procedure can be done iteratively
     multiple times, specifying the amount by the parameter
@@ -330,8 +330,8 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
 #######################################################################################################################
 #######################################################################################################################
 def random(
-    module,
-    **kwargs
+        module,
+        **kwargs
 ):
     """Initialize the layer default values from the network. If left untouched, the default values are as follows:
 
@@ -356,19 +356,87 @@ def random(
     return torch.from_numpy(W), torch.from_numpy(B)
 
 
-def pure_lda(
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def randisco(
     layer_index,
     init_input,
     init_labels,
     model,
     module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
     lin_normalize,
     lin_standardize,
     lin_scale,
     **kwargs
+):
+    """Initialize the layer default values from the network, then uses LDA discriminants.
+     If left untouched, the default values are as follows:
+
+        https://pytorch.org/docs/stable/nn.html#linear-layers
+        https://pytorch.org/docs/stable/nn.html#convolution-layers
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+
+    ##################################################################
+    # All layers but the last one
+    if layer_index < network_depth:
+        # Init W and B with the default values
+        W = module.weight.data.cpu().numpy()
+        B = module.bias.data.cpu().numpy() if module.bias is not None else np.zeros(module.weight.shape[0])
+
+    ##################################################################
+    # Last layer
+    else:
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+
+    return torch.from_numpy(W), torch.from_numpy(B)
+
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def pure_lda(
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """Initialize the layer with pure LDA function and pure LDA discriminants for the last layer
 
@@ -416,7 +484,7 @@ def pure_lda(
     ##################################################################
     # Last layer
     else:
-         W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -425,18 +493,18 @@ def pure_lda(
 #######################################################################################################################
 #######################################################################################################################
 def mirror_lda(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """Initialize the layer with LDA function, but it duplicates the columns with non-zero eigenvalue and mirrors them
     and pure LDA discriminants for the last layer
@@ -502,18 +570,18 @@ def mirror_lda(
 #######################################################################################################################
 #######################################################################################################################
 def highlander_lda(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """
     Initialize the layer with LDA by making a 1 vs ALL comparison for all classes. Thus we can initialize more columns
@@ -605,15 +673,15 @@ def highlander_lda(
 #######################################################################################################################
 #######################################################################################################################
 def pure_pca(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        **kwargs
 ):
     """Initialize the layer with pure PCA and leave the final layer "as it"
 
@@ -668,18 +736,18 @@ def pure_pca(
 #######################################################################################################################
 #######################################################################################################################
 def pcdisc(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """Initialize the layer with pure PCA and the final layer with linear discriminants
 
@@ -736,18 +804,18 @@ def pcdisc(
 #######################################################################################################################
 #######################################################################################################################
 def lpca(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """Initialize the layer with both PCA and LDA. The amount of columns could be an hyper-parameter
 
@@ -825,18 +893,18 @@ def lpca(
 #######################################################################################################################
 #######################################################################################################################
 def reverse_pca(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """Initialize the layer with the reverse PCA procedure. The basic idea is to leverage labels to find which dimensions
     would minimize the variance within one class i.e. we select the last columns of the PCA matrix L as candidate for
@@ -927,18 +995,18 @@ def reverse_pca(
 #######################################################################################################################
 #######################################################################################################################
 def relda(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """Initialize the layer with repreated LDA (reLDA). The core idea is to split the available columns into a number
     of iterations s.t. each iteration has the same amount of columns. At each iteration a LDA classifier is fit to the
@@ -1070,18 +1138,18 @@ def relda(
 #######################################################################################################################
 #######################################################################################################################
 def greedya(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    conv_normalize,
-    conv_standardize,
-    conv_scale,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        lin_normalize,
+        lin_standardize,
+        lin_scale,
+        **kwargs
 ):
     """
 
