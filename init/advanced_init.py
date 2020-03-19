@@ -410,7 +410,6 @@ def pure_lda(
         logging.info('Pure LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
         # Adapt the size of the weights
-        # B = np.zeros_like(B)
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
