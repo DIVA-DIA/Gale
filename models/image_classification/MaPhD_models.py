@@ -74,10 +74,8 @@ class InitBaseline(nn.Module):
         self.conv1 = nn.Sequential(nn.Conv2d(3, f, kernel_size=3, stride=1, padding=1), Swish())
         # Block 1: 32x32
         self.conv2 = nn.Sequential(nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish())
-        self.conv3 = nn.Sequential(nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish())
-        self.conv4 = nn.Sequential(nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish())
         # Last conv + GAP + flatten
-        self.conv5 = nn.Sequential(
+        self.conv3 = nn.Sequential(
             nn.Conv2d(f, f, kernel_size=3, stride=1, padding=1), Swish(),
             nn.AdaptiveAvgPool2d(output_size=(1, 1)),
             Flatten(),
@@ -93,7 +91,8 @@ class InitBaseline(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
-                m.bias.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
             if isinstance(m, nn.Linear):
                 n = m.in_features
                 m.weight.data.normal_(0, math.sqrt(2. / n))
@@ -106,8 +105,6 @@ class InitBaseline(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = self.conv4(x)
-        x = self.conv5(x)
         x = self.fc(x)
         return x
 
@@ -118,7 +115,7 @@ class InitBaseline(nn.Module):
 class InitBaselineVGGLike(nn.Module):
     expected_input_size = (32, 32)
 
-    def __init__(self, num_classes, activation_function, **kwargs):
+    def __init__(self, num_classes, activation_function='swish', **kwargs):
         super(InitBaselineVGGLike, self).__init__()
 
         af = Swish if 'swish' in activation_function else nn.Softsign
@@ -151,6 +148,7 @@ class InitBaselineVGGLike(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.weight.data.normal_(0, math.sqrt(1. / n))
                 if m.bias is not None:
                     m.bias.data.zero_()
             if isinstance(m, nn.Linear):
@@ -169,6 +167,59 @@ class InitBaselineVGGLike(nn.Module):
         x = self.conv_b2(x)
         x = self.conv_b3(x)
         x = self.conv_b4(x)
+
+        x = self.fc(x)
+        return x
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+@Model
+class LDApaper(nn.Module):
+    expected_input_size = (28, 28)
+
+    def __init__(self, num_classes, activation_function='swish', **kwargs):
+        super(LDApaper, self).__init__()
+
+        af = Swish if 'swish' in activation_function else nn.Softsign
+
+        cb = True  # Enable/Disable bias for convolutional layers
+        f = 24  # Initial number of dimensions
+
+        # First layer: 28x28
+        self.conv_1 = nn.Sequential(nn.Conv2d(3    , f    , bias=cb, kernel_size=5, stride=3), af())
+        # Second layer:
+        self.conv_2 = nn.Sequential(nn.Conv2d(f    , f * 2, bias=cb, kernel_size=3, stride=2), af())
+        # Third layer:
+        self.conv_3 = nn.Sequential(nn.Conv2d(f * 2, f * 3, bias=cb, kernel_size=3), af(),
+            Flatten(),
+        )
+
+        # Classification layer
+        self.fc = nn.Sequential(
+            nn.Linear(f * 3, num_classes)
+        )
+
+        # Initialize the weights of all layers. For Conv2d and Linear we use "Kaiming .He"
+        # for m in self.modules():
+        #     if isinstance(m, nn.Conv2d):
+        #         n = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
+        #         m.weight.data.normal_(0, math.sqrt(2. / n))
+        #         if m.bias is not None:
+        #             m.bias.data.zero_()
+        #     if isinstance(m, nn.Linear):
+        #         n = m.in_features
+        #         m.weight.data.normal_(0, math.sqrt(2. / n))
+        #         m.bias.data.zero_()
+        #     elif isinstance(m, nn.BatchNorm2d):
+        #         m.weight.data.fill_(1)
+        #         m.bias.data.zero_()
+
+    def forward(self, x):
+
+        x = self.conv_1(x)
+        x = self.conv_2(x)
+        x = self.conv_3(x)
 
         x = self.fc(x)
         return x
