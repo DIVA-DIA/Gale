@@ -247,7 +247,7 @@ def get_patches(X, y, kernel_size, patches_cap, **kwargs):
     if patches_cap >= possible_patches_per_sample * num_samples:
         max_patches = possible_patches_per_sample
     else:
-        max_patches = int(np.max((np.round(patches_cap / num_samples), 1)))  # At least one patch per sample
+        max_patches = int(np.max((np.ceil(patches_cap / num_samples), 1)))  # At least one patch per sample
 
     logging.info(
         f'Get {max_patches} patches of kernel size {kernel_size}'
@@ -257,7 +257,10 @@ def get_patches(X, y, kernel_size, patches_cap, **kwargs):
     # Init the return values
     all_patches, all_labels = [], []
     # For all images in X
-    for image, label in zip(tmp_X, tmp_y):
+    for i, (image, label) in enumerate(zip(tmp_X, tmp_y)):
+        if len(all_patches) >= patches_cap:
+            # If you collected enough samples, stop iterating
+            break
         # Transform the image in the right format for extract_patches_2d(). Needed as channels are not in same order
         image = np.transpose(image, axes=[1, 2, 0])
         # Extract the patches
@@ -269,20 +272,18 @@ def get_patches(X, y, kernel_size, patches_cap, **kwargs):
 
     # Flatten everything (here 'all_patches' and 'all_labels' are a list of lists. Each element of the outer list is
     # a list with all the patches (or corresponding labels) extracted from a single sample
-    all_patches = np.array([patch
-                            for patches in all_patches
-                            for patch in patches])
-    all_labels = np.array([label
-                           for labels in all_labels
-                           for label in labels])
-    assert len(all_patches) == len(extracted_patches) * len(tmp_X)
-    assert len(all_labels) == len(extracted_patches) * len(tmp_y)
+    all_patches = np.array([patch for patches in all_patches for patch in patches])
+    all_labels = np.array([label for labels in all_labels for label in labels])
 
     # Reshape the patches into a matrix form where one patch is one row and thus each pixel a column
     all_patches = all_patches.reshape(all_patches.shape[0], -1)
+    # Subset the selection if the cap was set smaller than number of samples received
+    if patches_cap < len(all_patches):
+        all_patches = all_patches[:patches_cap, :]
+        all_labels = all_labels[:patches_cap]
+    logging.info(f'Got {len(all_labels)} patches')
     assert len(all_patches.shape) == 2
-    assert all_patches.shape[0] == len(extracted_patches) * len(tmp_X)
+    assert all_patches.shape[0] == patches_cap
     assert all_patches.shape[1] == kernel_size[0] * kernel_size[1] * X[0].shape[1]  # X[0].shape[1] is the num channels
 
-    logging.info(f'Got {len(all_labels)} patches')
     return all_patches, all_labels
