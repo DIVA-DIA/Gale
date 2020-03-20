@@ -74,7 +74,7 @@ class CLArguments(BaseCLArguments):
                                  type=int,
                                  help='number of samples to use to perform data-driven initialization')
         parser_init.add_argument('--patches-cap',
-                                 type=float,
+                                 type=int,
                                  default=10000,
                                  help='ratio of patch to extract from each sample for conv layers')
         parser_init.add_argument('--solver',
