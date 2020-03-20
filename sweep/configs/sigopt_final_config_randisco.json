@@ -25,5 +25,5 @@
         "name": "lin-scale",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
-    },
+    }
 ]
