@@ -17,7 +17,7 @@
         "bounds": {"max": 20000, "min": 500}
     },
     {
-        "name": "conv-normalize",
+        "name": "conv-standardize",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
     }

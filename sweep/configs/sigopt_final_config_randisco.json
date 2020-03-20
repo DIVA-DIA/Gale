@@ -17,8 +17,13 @@
         "bounds": {"max": 20000, "min": 500}
     },
     {
-        "name": "conv-normalize",
+        "name": "lin-standardize",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
-    }
+    },
+    {
+        "name": "lin-scale",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
 ]

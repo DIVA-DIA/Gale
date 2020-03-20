@@ -14,7 +14,7 @@
     {
         "name": "patches-cap",
         "type": "int",
-        "bounds": {"max": 500000, "min": 500}
+        "bounds": {"max": 20000, "min": 500}
     },
     {
         "name": "conv-normalize",
@@ -32,11 +32,6 @@
         "bounds": {"max": 1, "min": 0}
     },
     {
-        "name": "lin-normalize",
-        "type": "int",
-        "bounds": {"max": 1, "min": 0}
-    },
-    {
         "name": "lin-standardize",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
@@ -45,18 +40,5 @@
         "name": "lin-scale",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
-    },
-    {
-        "name": "trim-lda",
-        "type": "categorical",
-        "categorical_values": [
-            {"enum_index": 1, "name": "true"},
-            {"enum_index": 2, "name": "false"}
-        ]
-    },
-    {
-        "name": "sn-ratio",
-        "type": "int",
-        "bounds": {"max": 5, "min": 0}
     }
 ]
