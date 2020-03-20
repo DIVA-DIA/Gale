@@ -15,7 +15,7 @@ SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_final_config.json"
 SIGOPT_PROJECT = "init"
-SIGOPT_PARALLEL_BANDWIDTH = 6
+SIGOPT_PARALLEL_BANDWIDTH = 5
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
@@ -26,12 +26,12 @@ SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "final"
-EPOCHS = 100 # For CB55 is /5
+EXPERIMENT_NAME_PREFIX = "small"
+EPOCHS = 50 # For CB55 is /5
 SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = 5
 # RUNS_PER_VARIANCE = 5
-PROCESSES_PER_GPU = 5
+PROCESSES_PER_GPU = 8
 
 
 ##########################################################################
@@ -39,33 +39,35 @@ PROCESSES_PER_GPU = 5
 MODELS = [
     # "LDA_Simple",
     # "InitBaseline",
-    "InitBaselineVGGLike",
+    # "InitBaselineVGGLike",
+    "LDApaper"
 ]
 
 DATASETS = [
     # SERVER_PREFIX + "/dataset/DIVA-HisDB/CB55",
     # SERVER_PREFIX + "/dataset/HAM10000",
     # SERVER_PREFIX + "/dataset/CIFAR10",
-    # SERVER_PREFIX + "/dataset/CINIC10",
+    SERVER_PREFIX + "/dataset/CINIC10",
     # SERVER_PREFIX + "/dataset/ColorectalHist",
-    SERVER_PREFIX + "/dataset/Flowers",
+    # SERVER_PREFIX + "/dataset/Flowers",
     # SERVER_PREFIX + "/dataset/ImageNet",
     # SERVER_PREFIX + "/dataset/signatures/GPDS-last100/genuine",
 ]
 
+# (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
-    ("random",          None, ""),
-    ("pure_lda",        None, ""),
-    # ("mirror_lda",      None, ""),
-    # ("highlander_lda",  None, ""),
-    ("pure_pca",        None, ""),
-    ("pcdisc",          None, ""),
-    # ("lpca",            None, ""),
-    ("greedya",         None, ""),
-    # ("reverse_pca", None, ""),
-    # ("relda",           None, ""),
+    ("random",          None, "", "sweep/configs/sigopt_final_config_random.json"),
+    ("randisco",        None, "", "sweep/configs/sigopt_final_config_randisco.json"),
+    ("pure_lda",        None, "--conv-standardize 1 --conv-scale 1 ", "sweep/configs/sigopt_final_config_pure_lda.json"),
+    # ("mirror_lda",      None, "", None),
+    # ("highlander_lda",  None, "", None),
+    ("pure_pca",        None, "--conv-standardize 1 --conv-scale 1 ", "sweep/configs/sigopt_final_config_pca.json"),
+    ("pcdisc",          None, "--conv-normalize 1 --conv-standardize 1 --conv-scale 1 --lin-standardise 1 --lin-scale 1 ", "sweep/configs/sigopt_final_config_pcdisc.json"),
+    ("lpca",            None, "", None),
+    # ("greedya",         None, "", None),
+    # ("reverse_pca", None, "", None),
+    # ("relda",           None, "", None),
 ]
-
 ##########################################################################
 # Creating Experiments
 ##########################################################################
@@ -124,22 +126,14 @@ class ExperimentsBuilder(object):
         experiments = []
         for dataset in datasets:
             for model in models:
-                for (init, experiment_id, extra) in runs:
+                for (init, experiment_id, extra, sigopt_custom_file) in runs:
                     experiment_name = experiment_name_prefix + '_' + init + '_' + Path(dataset).stem
 
-                    # TODO remove me! Nasty fix for custom settings per run init
-                    if 'random' in init:
-                        sigopt_file = "sweep/configs/sigopt_final_config_random.json"
-                    elif 'pure_pca' in init:
-                        sigopt_file = "sweep/configs/sigopt_final_config_pca.json"
-                    else:
-                        sigopt_file = SIGOPT_FILE
-
-                        # Create an experiment and gets its ID if necessary
+                    # Create an experiment and gets its ID if necessary
                     if experiment_id is None:
                         experiment_id = RunMe().create_sigopt_experiment(
                             sigopt_token=sigopt_token,
-                            sigopt_file=sigopt_file,
+                            sigopt_file=sigopt_file if sigopt_custom_file is None else sigopt_custom_file,
                             sigopt_project=sigopt_project,
                             sigopt_runs=sigopt_runs,
                             sigopt_parallel_bandwidth=sigopt_parallel_bandwidth,
