@@ -19,6 +19,34 @@ class CLArguments(BaseCLArguments):
         if args.split_type is None:
             args.split_type = "stratified_tag"
 
+        # Inject wisdom for default parameters based on the init function
+        init_function = args.init_function
+        if init_function == "randisco":    # x x x 1 1 0
+            args.lin_normalize = 1
+            args.lin_standardize = 1
+
+        if init_function is "pure_lda":    # 0 1 1 1 0 0
+            args.conv_standardize = 1
+            args.conv_scale = 1
+            args.lin_normalize = 1
+
+        if init_function == "pure_pca":    # 1 1 1 x x x
+            args.conv_normalize = 1
+            args.conv_standardize = 1
+            args.conv_scale = 1
+
+        if init_function == "pcdisc":      # 1 1 1 1 1 1
+            args.conv_normalize = 1
+            args.conv_standardize = 1
+            args.conv_scale = 1
+            args.lin_normalize = 1
+            args.lin_standardize = 1
+            args.lin_scale = 1
+
+        if init_function == "lpca":        # 0 0 1 1 0 0
+            args.conv_scale = 1
+            args.lin_normalize = 1
+
         return args, self.parser
 
     def str2bool(self, v):
@@ -75,7 +103,7 @@ class CLArguments(BaseCLArguments):
                                  help='number of samples to use to perform data-driven initialization')
         parser_init.add_argument('--patches-cap',
                                  type=int,
-                                 default=10000,
+                                 default=15000,
                                  help='ratio of patch to extract from each sample for conv layers')
         parser_init.add_argument('--solver',
                                  type=str,
@@ -104,7 +132,7 @@ class CLArguments(BaseCLArguments):
 
         parser_init.add_argument("--lin-normalize",
                                  type=int,
-                                 default=1,  # Don't even think about touching this!
+                                 default=0,
                                  help="Flag for normalizing linear weights")
         parser_init.add_argument("--lin-standardize",
                                  type=int,

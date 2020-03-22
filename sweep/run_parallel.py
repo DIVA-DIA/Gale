@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import os
 import sys
+import time
 from multiprocessing import Process, Queue
 from pathlib import Path
 
@@ -13,20 +14,21 @@ from template.RunMe import RunMe
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-SIGOPT_FILE = "sweep/configs/sigopt_final_config.json"
+SIGOPT_FILE = "sweep/configs/sigopt_final_config_standard.json"
 SIGOPT_PROJECT = "init"
 SIGOPT_PARALLEL_BANDWIDTH = 5
 
 # Init System Parameters #################################################
 NUM_GPUs = range(torch.cuda.device_count())
-#NUM_GPUs = [3, 4, 5, 6, 7]
+# NUM_GPUs = [3, 4, 5, 6, 7, 8]
 CPU_CORES = mp.cpu_count()
+# CPU_CORES = 44
 SERVER = 'lucy'
 SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "small"
+EXPERIMENT_NAME_PREFIX = "LDApaper"
 EPOCHS = 50 # For CB55 is /5
 SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = 5
@@ -44,10 +46,11 @@ MODELS = [
 ]
 
 DATASETS = [
-    # SERVER_PREFIX + "/dataset/DIVA-HisDB/CB55",
-    # SERVER_PREFIX + "/dataset/HAM10000",
+    SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55_23",
+    SERVER_PREFIX + "/dataset/HAM10000",
     # SERVER_PREFIX + "/dataset/CIFAR10",
-    SERVER_PREFIX + "/dataset/CINIC10",
+    # SERVER_PREFIX + "/dataset/CINIC10",
+    # "/var/cache/fscache/CINIC10",
     # SERVER_PREFIX + "/dataset/ColorectalHist",
     # SERVER_PREFIX + "/dataset/Flowers",
     # SERVER_PREFIX + "/dataset/ImageNet",
@@ -56,18 +59,19 @@ DATASETS = [
 
 # (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
-    ("random",          None, "", "sweep/configs/sigopt_final_config_random.json"),
-    ("randisco",        None, "", "sweep/configs/sigopt_final_config_randisco.json"),
-    ("pure_lda",        None, "--conv-standardize 1 --conv-scale 1 ", "sweep/configs/sigopt_final_config_pure_lda.json"),
+    ("random",          None, "", None),
+    ("randisco",        None, "", None),
+    ("pure_lda",        None, "", None),
+    ("pure_pca",        None, "", None),
+    ("pcdisc",          None, "", None),
+    ("lpca",            None, "", None),
     # ("mirror_lda",      None, "", None),
     # ("highlander_lda",  None, "", None),
-    ("pure_pca",        None, "--conv-standardize 1 --conv-scale 1 ", "sweep/configs/sigopt_final_config_pca.json"),
-    ("pcdisc",          None, "--conv-normalize 1 --conv-standardize 1 --conv-scale 1 --lin-standardise 1 --lin-scale 1 ", "sweep/configs/sigopt_final_config_pcdisc.json"),
-    ("lpca",            None, "", None),
     # ("greedya",         None, "", None),
     # ("reverse_pca", None, "", None),
     # ("relda",           None, "", None),
 ]
+
 ##########################################################################
 # Creating Experiments
 ##########################################################################
@@ -165,7 +169,7 @@ class ExperimentsBuilder(object):
                             model_name=model,
                             output_folder=output_folder,
                             input_folder=dataset,
-                            epochs=int(epochs/5) if "CB55" in dataset else epochs,
+                            epochs=epochs, #int(epochs/5) if "CB55" in dataset else epochs,
                             init=init,
                             additional=additional
                         ))
@@ -315,6 +319,7 @@ class ExperimentProcess(Process):
 ##########################################################################
 def run_experiments(gpu_indexes, processes_per_gpu, queue):
     processes = []
+    max_processes = queue.qsize()
     i = 0
     for _ in range(processes_per_gpu):
         for gpu_index in gpu_indexes:
@@ -323,6 +328,12 @@ def run_experiments(gpu_indexes, processes_per_gpu, queue):
             process.start()
             processes.append(process)
             i += 1
+            if i == max_processes:
+                # This happens if queue.qsize() < #num process that can be allocated in total
+                break
+        if i == max_processes:
+            break
+
     for p in processes:
         p.join()
 

@@ -32,6 +32,11 @@
         "bounds": {"max": 1, "min": 0}
     },
     {
+        "name": "lin-normalize",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
         "name": "lin-standardize",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
