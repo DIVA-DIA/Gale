@@ -283,7 +283,7 @@ def get_patches(X, y, kernel_size, patches_cap, **kwargs):
         all_labels = all_labels[:patches_cap]
     logging.info(f'Got {len(all_labels)} patches')
     assert len(all_patches.shape) == 2
-    assert all_patches.shape[0] == patches_cap
+    assert all_patches.shape[0] == patches_cap or all_patches.shape[0] == possible_patches_per_sample * num_samples
     assert all_patches.shape[1] == kernel_size[0] * kernel_size[1] * X[0].shape[1]  # X[0].shape[1] is the num channels
 
     return all_patches, all_labels
