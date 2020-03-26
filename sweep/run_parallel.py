@@ -14,21 +14,22 @@ from template.RunMe import RunMe
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
 # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-SIGOPT_FILE = "sweep/configs/sigopt_final_config_standard.json"
-SIGOPT_PROJECT = "init"
-SIGOPT_PARALLEL_BANDWIDTH = 5
+SIGOPT_FILE = "sweep/configs/sigopt_final_config_sbgatto.json"
+SIGOPT_PROJECT = "mahpd"
+SIGOPT_PARALLEL_BANDWIDTH = 6
 
 # Init System Parameters #################################################
-NUM_GPUs = range(torch.cuda.device_count())
+# NUM_GPUs = range(torch.cuda.device_count())
 # NUM_GPUs = [3, 4, 5, 6, 7, 8]
-CPU_CORES = mp.cpu_count()
-# CPU_CORES = 44
+NUM_GPUs = [1, 2, 3, 4, 5, 6, 7]
+# CPU_CORES = mp.cpu_count()
+CPU_CORES = 30
 SERVER = 'lucy'
 SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "LDApaper"
+EXPERIMENT_NAME_PREFIX = "sbgatto"
 EPOCHS = 50 # For CB55 is /5
 SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = 5
@@ -46,10 +47,10 @@ MODELS = [
 ]
 
 DATASETS = [
-    SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55_23",
-    SERVER_PREFIX + "/dataset/HAM10000",
+    # SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55_23",
+    # SERVER_PREFIX + "/dataset/HAM10000",
     # SERVER_PREFIX + "/dataset/CIFAR10",
-    # SERVER_PREFIX + "/dataset/CINIC10",
+    SERVER_PREFIX + "/dataset/CINIC10",
     # "/var/cache/fscache/CINIC10",
     # SERVER_PREFIX + "/dataset/ColorectalHist",
     # SERVER_PREFIX + "/dataset/Flowers",
@@ -59,16 +60,16 @@ DATASETS = [
 
 # (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
-    ("random",          None, "", None),
-    ("randisco",        None, "", None),
-    ("pure_lda",        None, "", None),
-    ("pure_pca",        None, "", None),
-    ("pcdisc",          None, "", None),
-    ("lpca",            None, "", None),
+    ("randisco",        175325, "", None),
+    ("pure_lda",        175326, "", None),
+    ("pure_pca",        175327, "", None),
+    ("pcdisc",          175328, "", None),
+    ("lpca",            175329, "", None),
+
     # ("mirror_lda",      None, "", None),
     # ("highlander_lda",  None, "", None),
     # ("greedya",         None, "", None),
-    # ("reverse_pca", None, "", None),
+    # ("reverse_pca",     None, "", None),
     # ("relda",           None, "", None),
 ]
 
@@ -153,13 +154,15 @@ class ExperimentsBuilder(object):
                     # Setup the additional parameters (not default ones)
                     additional = (
                         f"{extra} "
-                        f"--wandb-project sigopt_{experiment_name_prefix}_{Path(dataset).stem} "
+                        # f"--wandb-project sigopt_{experiment_name_prefix}_{Path(dataset).stem} "
+                        f"--wandb-project sigopt_{experiment_name_prefix} "
                         f"--sigopt-token {sigopt_token:s} "
                         f"--sigopt-experiment-id {experiment_id} "
                         f"-j {ExperimentProcess.num_workers():d} "
                         f"--multi-run {multi_run} "
-                        f"--validation-interval 2 "
                         f"--inmem "
+                        f"--trim-lda false --patches-cap 100000 "
+                        f"--validation-interval 2 "
                     )
 
                     # Create as many parallel one as required
@@ -308,11 +311,11 @@ class ExperimentProcess(Process):
     @staticmethod
     def list_cpus(index) -> str:
         workers = ExperimentProcess.num_workers()
-        start_index = index * workers
-        if start_index + workers > CPU_CORES:
-            raise EnvironmentError(
-                f"Attempt to allocate more cores ({start_index + workers}) than available ({CPU_CORES})."
-            )
+        start_index = 30 + index * workers
+        # if start_index + workers > CPU_CORES:
+        #     raise EnvironmentError(
+        #         f"Attempt to allocate more cores ({start_index + workers}) than available ({CPU_CORES})."
+        #     )
         return ",".join([str(x) for x in list(range(start_index, start_index + workers))])
 
 
@@ -327,6 +330,7 @@ def run_experiments(gpu_indexes, processes_per_gpu, queue):
             process = ExperimentProcess(queue=queue, gpu_index=gpu_index, cpu_list=cpu_list)
             process.start()
             processes.append(process)
+            time.sleep(60)
             i += 1
             if i == max_processes:
                 # This happens if queue.qsize() < #num process that can be allocated in total

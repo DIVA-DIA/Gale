@@ -47,6 +47,10 @@ class CLArguments(BaseCLArguments):
             args.conv_scale = 1
             args.lin_normalize = 1
 
+        if init_function == "sbgatto":
+            args.conv_standardize = 1
+            args.conv_scale = 1
+
         return args, self.parser
 
     def str2bool(self, v):
@@ -152,3 +156,6 @@ class CLArguments(BaseCLArguments):
                                  default=0,
                                  help='ratio of noise to be added on the conv weights')
 
+        parser_init.add_argument('--retrain-wd', type=float)
+        parser_init.add_argument('--retrain-lr', type=float)
+        parser_init.add_argument('--retrain-epochs', type=int)

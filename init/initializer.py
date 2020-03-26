@@ -18,6 +18,7 @@ from sklearn.feature_extraction.image import extract_patches_2d
 from torch import nn
 
 from init import advanced_init
+from init.advanced_init import minibatches_to_matrix
 from template.runner.base.base_routine import BaseRoutine
 
 
@@ -73,9 +74,8 @@ def init_model(model, data_loader, init_function, **kwargs):
         # LINEAR LAYER
         if type(module) is nn.Linear:
             compute_parameters = True
-            # Reshape mini-batches into a matrix form
-            init_input = minibatches_to_matrix(X)
-            init_labels = minibatches_to_matrix(y)
+            init_input = X
+            init_labels = y
 
         #######################################################################
         # Compute data-driven parameters (if a module with weights has been detected in this layer earlier)
@@ -189,28 +189,6 @@ def get_module_from_sequential_layer(layer):
         if module_type is nn.Conv2d or module_type is nn.Linear:
             return module
     return None
-
-
-
-def minibatches_to_matrix(A):
-    """Flattens the a list of matrices of shape[[minibatch, dim_1, ..., dim_n], [minibatch, dim_1, ..., dim_n] ...] such
-    that it becomes [minibatch size * len(list), dim_1 * dim_2 ... * dim_n]
-
-    Parameters
-    ----------
-    A : list(FloatTensor)
-        Input samples structured in batches
-
-
-    Returns
-    -------
-    A : ndarray([number of elements, dimensionality of elements flattened]) or ndarray(number of elements)
-        Flattened matrix
-    """
-    A = np.array([sample.data.view(-1).numpy() for minibatch in A for sample in minibatch])
-    if A.shape[1] == 1:
-        A = np.squeeze(A)
-    return A
 
 
 def get_patches(X, y, kernel_size, patches_cap, **kwargs):

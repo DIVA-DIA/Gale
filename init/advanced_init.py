@@ -6,14 +6,40 @@ import time
 import logging
 import math
 import sys
+from itertools import count
 
 import numpy as np
 import torch
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from torch import nn
+from torch import nn, optim
 
+from evaluation.metrics import accuracy
 from init.util import lda, pca
+from template.runner.base.base_routine import BaseRoutine
+from template.runner.base.base_setup import BaseSetup
+from util.TB_writer import TBWriter
+from util.metric_logger import MetricLogger
 
+
+def minibatches_to_matrix(A):
+    """Flattens the a list of matrices of shape[[minibatch, dim_1, ..., dim_n], [minibatch, dim_1, ..., dim_n] ...] such
+    that it becomes [minibatch size * len(list), dim_1 * dim_2 ... * dim_n]
+
+    Parameters
+    ----------
+    A : list(FloatTensor)
+        Input samples structured in batches
+
+
+    Returns
+    -------
+    A : ndarray([number of elements, dimensionality of elements flattened]) or ndarray(number of elements)
+        Flattened matrix
+    """
+    A = np.array([sample.data.view(-1).numpy() for minibatch in A for sample in minibatch])
+    if A.shape[1] == 1:
+        A = np.squeeze(A)
+    return A
 
 def _normalize_weights(w, b):
     """
@@ -316,6 +342,10 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
     b : ndarray2d
         Bias array relative to W
     """
+    # Reshape mini-batches into a matrix form
+    init_input = minibatches_to_matrix(init_input)
+    init_labels = minibatches_to_matrix(init_labels)
+
     logging.info('LDA Discriminants')
     if trim_lda:
         init_input, init_labels = _filter_points_trimlda(init_input=init_input, init_labels=init_labels, **kwargs)
@@ -323,6 +353,132 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
     W, B = lda.discriminants(X=init_input, y=init_labels, **kwargs)
     # Adapt the size of the weights
     return _adapt_magnitude(w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale)
+
+
+def _retrain_classifier(
+        module,
+        init_input,
+        init_labels,
+        retrain_lr,
+        retrain_wd,
+        retrain_epochs,
+        **kwargs):
+    # # Create classifier and init it with LDA
+    # classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
+    # classifier = classifier.cuda()
+    # # Measure initial accuracy
+    # acc = 0
+    # for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
+    #     input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
+    #     output = classifier(input)
+    #     acc += accuracy(output.data, target.data, topk=(1,))[0]
+    # acc /= i
+    # print(f'FROM SCRATCH')
+    # print(f'\t\t[-1] {acc.data.cpu().numpy()}')
+    # # Further train it
+    # optimizer = BaseSetup().get_optimizer(model=classifier, **kwargs)
+    # optimizer = optim.Adam(classifier.parameters(), lr=0.01)
+    # criterion = BaseSetup().get_criterion(**kwargs)
+    # PATIENCE_INIT = 10
+    # patience = PATIENCE_INIT
+    # best_acc = 0
+    # lr = kwargs['lr']
+    # for e in count(1):
+    #     if lr < 0.00001:
+    #         print(f"LR is now {lr} -> Exiting!")
+    #         break
+    #     acc = 0
+    #     for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
+    #         input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
+    #         optimizer.zero_grad()
+    #         output = classifier(input)
+    #         loss = criterion(output, target)
+    #         loss.backward()
+    #         optimizer.step()
+    #         acc += accuracy(output.data, target.data, topk=(1,))[0]
+    #     acc /= i
+    #     acc = acc.data.cpu().numpy()
+    #     print(f'\t[{e}] {acc}')
+    #     if acc > best_acc:
+    #         best_acc = acc
+    #         patience = PATIENCE_INIT
+    #     else:
+    #         patience -= 1
+    #
+    #     if patience == 0:
+    #         patience = PATIENCE_INIT
+    #         lr /= 10
+    #         for param_group in optimizer.param_groups:
+    #             param_group['lr'] = lr
+    #         print(f"LR decayed to {lr}")
+    # print(f'\t[BEST] {best_acc}')
+
+    # Compute LDA discriminants
+    w, b = _lda_discriminants(init_input, init_labels, **kwargs)
+    # Create classifier and init it with LDA
+    classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
+    classifier.weight.data.copy_(torch.from_numpy(w))
+    classifier.bias.data.copy_(torch.from_numpy(b))
+    classifier = classifier.cuda()
+    # Measure initial accuracy
+    acc = 0
+    for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
+        input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
+        output = classifier(input)
+        acc += accuracy(output.data, target.data, topk=(1,))[0]
+    acc /= i
+    lda_accuracy = acc.data.cpu().numpy()
+    print(f'\t[-1] {lda_accuracy}')
+
+    # Further train it
+    kwargs['lr'] = 0.01
+    lr = kwargs['lr']
+    # optimizer = BaseSetup().get_optimizer(model=classifier, **kwargs)
+    optimizer = optim.SGD(classifier.parameters(), lr=retrain_lr, weight_decay=retrain_wd, momentum=0.9, nesterov=True)
+    criterion = BaseSetup().get_criterion(**kwargs)
+    PATIENCE_INIT = 20
+    patience = PATIENCE_INIT
+    best_acc = 0
+
+    # for e in count(1):
+    for e in range(retrain_epochs):
+        # if lr < 0.0001:
+        #     print(f"LR is now {lr} -> Exiting!")
+        #     break
+        acc = 0
+        for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
+            input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
+            optimizer.zero_grad()
+            output = classifier(input)
+            loss = criterion(output, target)
+            loss.backward()
+            optimizer.step()
+            acc += accuracy(output.data, target.data, topk=(1,))[0]
+        acc /= i
+        acc = acc.data.cpu().numpy()
+        print(f'\t[{e}] {acc}')
+        TBWriter().add_scalar(tag='init_lda_accuracy', scalar_value=lda_accuracy, global_step=e)
+        TBWriter().add_scalar(tag='init_retrain', scalar_value=acc, global_step=e)
+
+        if acc > best_acc + 0.1:
+            best_acc = acc
+            patience = PATIENCE_INIT
+        else:
+            patience -= 1
+
+        if patience == 0:
+            patience = PATIENCE_INIT
+            lr /= 10
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr
+            print(f"LR decayed to {lr}")
+    print(f'\t[BEST] {best_acc}')
+    TBWriter().add_scalar(tag='init_best_acc', scalar_value=best_acc)
+    # Copy the final weights and adapt their magnitude
+    W = classifier.weight.data.cpu().numpy()
+    B = classifier.bias.data.cpu().numpy()
+    W, B = _adapt_magnitude(w=W, b=B, normalize=True, standardize=True, scale=False)
+    return W, B
 
 
 #######################################################################################################################
@@ -361,15 +517,12 @@ def random(
 #######################################################################################################################
 #######################################################################################################################
 def randisco(
-    layer_index,
-    init_input,
-    init_labels,
-    model,
-    module,
-    lin_normalize,
-    lin_standardize,
-    lin_scale,
-    **kwargs
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        **kwargs
 ):
     """Initialize the layer default values from the network, then uses LDA discriminants.
      If left untouched, the default values are as follows:
@@ -391,10 +544,6 @@ def randisco(
         The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -415,7 +564,7 @@ def randisco(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -433,9 +582,6 @@ def pure_lda(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """Initialize the layer with pure LDA function and pure LDA discriminants for the last layer
@@ -458,10 +604,6 @@ def pure_lda(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -484,7 +626,7 @@ def pure_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -501,9 +643,6 @@ def mirror_lda(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """Initialize the layer with LDA function, but it duplicates the columns with non-zero eigenvalue and mirrors them
@@ -527,10 +666,6 @@ def mirror_lda(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -560,7 +695,7 @@ def mirror_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -578,9 +713,6 @@ def highlander_lda(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """
@@ -606,10 +738,6 @@ def highlander_lda(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -664,7 +792,7 @@ def highlander_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -744,9 +872,6 @@ def pcdisc(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """Initialize the layer with pure PCA and the final layer with linear discriminants
@@ -769,10 +894,6 @@ def pcdisc(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -795,7 +916,7 @@ def pcdisc(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -812,9 +933,6 @@ def lpca(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """Initialize the layer with both PCA and LDA. The amount of columns could be an hyper-parameter
@@ -837,10 +955,6 @@ def lpca(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -883,7 +997,7 @@ def lpca(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -901,9 +1015,6 @@ def reverse_pca(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """Initialize the layer with the reverse PCA procedure. The basic idea is to leverage labels to find which dimensions
@@ -930,10 +1041,6 @@ def reverse_pca(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -985,7 +1092,7 @@ def reverse_pca(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -1003,9 +1110,6 @@ def relda(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """Initialize the layer with repreated LDA (reLDA). The core idea is to split the available columns into a number
@@ -1035,10 +1139,6 @@ def relda(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -1129,7 +1229,7 @@ def relda(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -1146,9 +1246,6 @@ def greedya(
         conv_normalize,
         conv_standardize,
         conv_scale,
-        lin_normalize,
-        lin_standardize,
-        lin_scale,
         **kwargs
 ):
     """
@@ -1172,10 +1269,6 @@ def greedya(
     conv_standardize : bool
     conv_scale : bool
         Flags for adapting the magnitude of the weights of convolutional layers
-    lin_normalize : bool
-    lin_standardize : bool
-    lin_scale : bool
-        Flags for adapting the magnitude of the weights of linear layers
 
     Returns
     -------
@@ -1292,6 +1385,74 @@ def greedya(
     ##################################################################
     # Last layer
     else:
-        W, B = _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, **kwargs)
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def sbgatto(
+        layer_index,
+        init_input,
+        init_labels,
+        model,
+        module,
+        conv_normalize,
+        conv_standardize,
+        conv_scale,
+        **kwargs
+):
+    """ Init the last layer with SoftMax pre-train
+
+
+    Parameters
+    ----------
+    layer_index : int
+        The layer being initialized. Ranges from 1 to network_depth
+    init_input : ndarray 2d
+        Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
+        data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
+        (in_channels * kernel_size * kernel_size)
+    init_labels :  ndarray 2d
+        Labels corresponding to the input data. The size is same as `init_input`
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    conv_normalize : bool
+    conv_standardize : bool
+    conv_scale : bool
+        Flags for adapting the magnitude of the weights of convolutional layers
+    lin_normalize : bool
+    lin_standardize : bool
+    lin_scale : bool
+        Flags for adapting the magnitude of the weights of linear layers
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    network_depth = len(list(list(model.children())[0].children()))
+
+    ##################################################################
+    # All layers but the last one
+    if layer_index < network_depth:
+        logging.info('Pure LDA Transform')
+        W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
+        # Adapt the size of the weights
+        W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
+        W, B = _basic_conv_procedure(W, B, module, **kwargs)
+
+    ##################################################################
+    # Last layer
+    else:
+        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+
+    return torch.from_numpy(W), torch.from_numpy(B)
+
+
