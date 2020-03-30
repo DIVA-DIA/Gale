@@ -147,6 +147,19 @@ class CLArguments(BaseCLArguments):
                                  default=0,
                                  help="Flag for normalizing linear weights")
 
+        parser_init.add_argument("--retrain-normalize",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for normalizing retrain weights")
+        parser_init.add_argument("--retrain-standardize",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for standardizing retrain weights")
+        parser_init.add_argument("--retrain-scale",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for normalizing retrain weights")
+
         parser_init.add_argument("--trim-lda",
                                  type=self.str2bool,
                                  default="True",
@@ -156,6 +169,19 @@ class CLArguments(BaseCLArguments):
                                  default=0,
                                  help='ratio of noise to be added on the conv weights')
 
-        parser_init.add_argument('--retrain-wd', type=float)
-        parser_init.add_argument('--retrain-lr', type=float)
-        parser_init.add_argument('--retrain-epochs', type=int)
+        parser_init.add_argument("--retrain",
+                                 type=self.str2bool,
+                                 default="False",
+                                 help="Flag for retraining the classifier")
+        parser_init.add_argument('--retrain-wd',
+                                 type=float,
+                                 default=0.003,
+                                 help="Weight decay for the last layer")
+        parser_init.add_argument('--retrain-lr',
+                                 type=float,
+                                 default=0.015,
+                                 help="Learning rate for the last layer")
+        parser_init.add_argument('--retrain-epochs',
+                                 type=int,
+                                 default=100,
+                                 help="Number of epochs for the last layer")

@@ -355,71 +355,81 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
     return _adapt_magnitude(w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale)
 
 
-def _retrain_classifier(
+def _initialize_classifier(
+        *,
         module,
         init_input,
         init_labels,
-        retrain_lr,
-        retrain_wd,
-        retrain_epochs,
+        retrain,
+        retrain_normalize,
+        retrain_standardize,
+        retrain_scale,
         **kwargs):
-    # # Create classifier and init it with LDA
-    # classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
-    # classifier = classifier.cuda()
-    # # Measure initial accuracy
-    # acc = 0
-    # for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
-    #     input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
-    #     output = classifier(input)
-    #     acc += accuracy(output.data, target.data, topk=(1,))[0]
-    # acc /= i
-    # print(f'FROM SCRATCH')
-    # print(f'\t\t[-1] {acc.data.cpu().numpy()}')
-    # # Further train it
-    # optimizer = BaseSetup().get_optimizer(model=classifier, **kwargs)
-    # optimizer = optim.Adam(classifier.parameters(), lr=0.01)
-    # criterion = BaseSetup().get_criterion(**kwargs)
-    # PATIENCE_INIT = 10
-    # patience = PATIENCE_INIT
-    # best_acc = 0
-    # lr = kwargs['lr']
-    # for e in count(1):
-    #     if lr < 0.00001:
-    #         print(f"LR is now {lr} -> Exiting!")
-    #         break
-    #     acc = 0
-    #     for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
-    #         input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
-    #         optimizer.zero_grad()
-    #         output = classifier(input)
-    #         loss = criterion(output, target)
-    #         loss.backward()
-    #         optimizer.step()
-    #         acc += accuracy(output.data, target.data, topk=(1,))[0]
-    #     acc /= i
-    #     acc = acc.data.cpu().numpy()
-    #     print(f'\t[{e}] {acc}')
-    #     if acc > best_acc:
-    #         best_acc = acc
-    #         patience = PATIENCE_INIT
-    #     else:
-    #         patience -= 1
-    #
-    #     if patience == 0:
-    #         patience = PATIENCE_INIT
-    #         lr /= 10
-    #         for param_group in optimizer.param_groups:
-    #             param_group['lr'] = lr
-    #         print(f"LR decayed to {lr}")
-    # print(f'\t[BEST] {best_acc}')
+    """ Initialize the classifier layer with LDA and if specified further train it with XE
 
+    Parameters
+    ----------
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    retrain : bool
+        Flag for retraining the classifier
+    retrain_normalize : bool
+    retrain_standardize : bool
+    retrain_scale : bool
+        Flags for adapting the magnitude of the weights of linear layer after retraining
+
+    Returns
+    -------
+    w : ndarray2d
+        Weight matrix to compute LDA discriminants
+    b : ndarray2d
+        Bias array relative to W
+    """
     # Compute LDA discriminants
-    w, b = _lda_discriminants(init_input, init_labels, **kwargs)
-    # Create classifier and init it with LDA
-    classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
-    classifier.weight.data.copy_(torch.from_numpy(w))
-    classifier.bias.data.copy_(torch.from_numpy(b))
-    classifier = classifier.cuda()
+    W, B = _lda_discriminants(init_input, init_labels, **kwargs)
+
+    # If requested, further train the classifier with LDA
+    if retrain:
+        # Create classifier
+        classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
+        # Init it with the LDA numbers
+        classifier.weight.data.copy_(torch.from_numpy(W))
+        classifier.bias.data.copy_(torch.from_numpy(B))
+        classifier = classifier.cuda()
+        # Further train it
+        _train_classifier(classifier=classifier, init_input=init_input, init_labels=init_labels, **kwargs)
+        # Copy the final weights and adapt their magnitude
+        W = classifier.weight.data.cpu().numpy()
+        B = classifier.bias.data.cpu().numpy()
+        W, B = _adapt_magnitude(w=W, b=B, normalize=retrain_normalize, standardize=retrain_standardize, scale=retrain_scale)
+    return W, B
+
+
+def _train_classifier(classifier, init_input, init_labels, retrain_epochs, retrain_lr, retrain_wd, **kwargs):
+    """ Train the classifier passed as parameters with XE
+
+    Parameters
+    ----------
+    classifier : torch.nn.Module
+        The classifier  to train
+    init_input : list(FloatTensor)
+        Input samples structured in batches
+    init_labels : list(FloatTensor)
+        Input labels structured in batches
+    retrain_lr : float
+        Learning rate for the last layer
+    retrain_wd : float
+        Weight decay for the last layer
+    retrain_epochs : int 
+        Number of epochs for the last layer
+
+    Returns
+    -------
+    w : ndarray2d
+        Weight matrix to compute LDA discriminants
+    b : ndarray2d
+        Bias array relative to W
+    """
     # Measure initial accuracy
     acc = 0
     for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
@@ -429,17 +439,11 @@ def _retrain_classifier(
     acc /= i
     lda_accuracy = acc.data.cpu().numpy()
     print(f'\t[-1] {lda_accuracy}')
-
     # Further train it
-    kwargs['lr'] = 0.01
-    lr = kwargs['lr']
-    # optimizer = BaseSetup().get_optimizer(model=classifier, **kwargs)
     optimizer = optim.SGD(classifier.parameters(), lr=retrain_lr, weight_decay=retrain_wd, momentum=0.9, nesterov=True)
     criterion = BaseSetup().get_criterion(**kwargs)
-    PATIENCE_INIT = 20
-    patience = PATIENCE_INIT
-    best_acc = 0
 
+    best_acc = 0
     # for e in count(1):
     for e in range(retrain_epochs):
         # if lr < 0.0001:
@@ -460,25 +464,8 @@ def _retrain_classifier(
         TBWriter().add_scalar(tag='init_lda_accuracy', scalar_value=lda_accuracy, global_step=e)
         TBWriter().add_scalar(tag='init_retrain', scalar_value=acc, global_step=e)
 
-        if acc > best_acc + 0.1:
-            best_acc = acc
-            patience = PATIENCE_INIT
-        else:
-            patience -= 1
-
-        if patience == 0:
-            patience = PATIENCE_INIT
-            lr /= 10
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
-            print(f"LR decayed to {lr}")
     print(f'\t[BEST] {best_acc}')
     TBWriter().add_scalar(tag='init_best_acc', scalar_value=best_acc)
-    # Copy the final weights and adapt their magnitude
-    W = classifier.weight.data.cpu().numpy()
-    B = classifier.bias.data.cpu().numpy()
-    W, B = _adapt_magnitude(w=W, b=B, normalize=True, standardize=True, scale=False)
-    return W, B
 
 
 #######################################################################################################################
@@ -564,7 +551,7 @@ def randisco(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -626,7 +613,7 @@ def pure_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -695,7 +682,7 @@ def mirror_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -792,7 +779,7 @@ def highlander_lda(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -916,7 +903,7 @@ def pcdisc(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -997,7 +984,7 @@ def lpca(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -1092,7 +1079,7 @@ def reverse_pca(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -1229,7 +1216,7 @@ def relda(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
@@ -1385,7 +1372,7 @@ def greedya(
     ##################################################################
     # Last layer
     else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+        W, B = _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
