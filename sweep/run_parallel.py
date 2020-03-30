@@ -13,10 +13,10 @@ from template.RunMe import RunMe
 
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
-SIGOPT_FILE = "sweep/configs/sigopt_final_config_sbgatto.json"
+SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+SIGOPT_FILE = "sweep/configs/sigopt_final_config_standard.json"
 SIGOPT_PROJECT = "mahpd"
-SIGOPT_PARALLEL_BANDWIDTH = 6
+SIGOPT_PARALLEL_BANDWIDTH = 10
 
 # Init System Parameters #################################################
 # NUM_GPUs = range(torch.cuda.device_count())
@@ -29,10 +29,10 @@ SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "sbgatto"
+EXPERIMENT_NAME_PREFIX = "retrain"
 EPOCHS = 50 # For CB55 is /5
-SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
-MULTI_RUN = 5
+SIGOPT_RUNS = 500 # 10 * num of parameters to optimize + 10 buffer + 10 top performing
+MULTI_RUN = 3
 # RUNS_PER_VARIANCE = 5
 PROCESSES_PER_GPU = 8
 
@@ -43,7 +43,8 @@ MODELS = [
     # "LDA_Simple",
     # "InitBaseline",
     # "InitBaselineVGGLike",
-    "LDApaper"
+    # "LDApaper",
+    "babyresnet18",
 ]
 
 DATASETS = [
@@ -60,11 +61,13 @@ DATASETS = [
 
 # (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
-    ("randisco",        175325, "", None),
-    ("pure_lda",        175326, "", None),
-    ("pure_pca",        175327, "", None),
-    ("pcdisc",          175328, "", None),
-    ("lpca",            175329, "", None),
+    ("random",          None, "", None),
+    ("randisco",        None, "",                                 "sweep/configs/sigopt_final_config_randisco"),
+    ("randisco",        None, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_sbgatto.json"),
+    # ("pure_lda",        None, "", None),
+    # ("pure_pca",        None, "", None),
+    # ("pcdisc",          None, "", None),
+    # ("lpca",            None, "", None),
 
     # ("mirror_lda",      None, "", None),
     # ("highlander_lda",  None, "", None),
@@ -134,6 +137,9 @@ class ExperimentsBuilder(object):
                 for (init, experiment_id, extra, sigopt_custom_file) in runs:
                     experiment_name = experiment_name_prefix + '_' + init + '_' + Path(dataset).stem
 
+                    if extra is not "":
+                        experiment_name = experiment_name_prefix + '_' + init + '_retrain_' + Path(dataset).stem
+
                     # Create an experiment and gets its ID if necessary
                     if experiment_id is None:
                         experiment_id = RunMe().create_sigopt_experiment(
@@ -161,7 +167,7 @@ class ExperimentsBuilder(object):
                         f"-j {ExperimentProcess.num_workers():d} "
                         f"--multi-run {multi_run} "
                         f"--inmem "
-                        f"--trim-lda false --patches-cap 100000 "
+                        f"--patches-cap 200000 "
                         f"--validation-interval 2 "
                     )
 

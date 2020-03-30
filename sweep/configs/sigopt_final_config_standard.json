@@ -10,20 +10,5 @@
         "type": "double",
         "precision": 5,
         "bounds": {"max": 0.03, "min": 0.0003}
-    },
-    {
-        "name": "lin-normalize",
-        "type": "int",
-        "bounds": {"max": 1, "min": 0}
-    },
-    {
-        "name": "lin-standardize",
-        "type": "int",
-        "bounds": {"max": 1, "min": 0}
-    },
-    {
-        "name": "lin-scale",
-        "type": "int",
-        "bounds": {"max": 1, "min": 0}
     }
 ]
