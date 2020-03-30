@@ -10,6 +10,7 @@ import sys
 import time
 from itertools import count
 from threading import Thread
+from tqdm import tqdm
 
 import gc
 import numpy as np
@@ -47,6 +48,8 @@ def init_model(model, data_loader, init_function, **kwargs):
     logging.info('Iterate over all layers')
     memory = psutil.virtual_memory().used
     for index, layer in enumerate(list(list(model.children())[0].children()), start=1):
+        logging.info(f'\nLayer: {index} - layer: {type(layer)}')
+        compute_parameters = False
 
         if psutil.virtual_memory().used > memory:
             logging.info(f"[MEMORY] Higher memory usage: {psutil.virtual_memory().used:,}")
@@ -60,13 +63,15 @@ def init_model(model, data_loader, init_function, **kwargs):
                     sys.exit(-1)
                 time.sleep(600)
 
-        # Get module from layer
-        module = get_module_from_sequential_layer(layer)
-        compute_parameters = False
-        logging.info(f'\nLayer: {index} - layer: {type(module)}')
+        # SEQUENTIAL LAYER
+        if type(layer) is nn.Sequential and kwargs['model_name'] != 'babyresnet18':
+            # Get module from layer
+            module = get_module_from_sequential_layer(layer)
+        else:
+            module = layer
 
         # CONV LAYER
-        if type(module) is nn.Conv2d:
+        if type(module) is nn.Conv2d and kwargs['model_name'] != 'babyresnet18':
             compute_parameters = True
             # Get the patches in a matrix form
             init_input, init_labels = get_patches(X=X, y=y, kernel_size=module.kernel_size, **kwargs)
@@ -103,7 +108,7 @@ def init_model(model, data_loader, init_function, **kwargs):
         #######################################################################
         # Forward pass of this layer
         logging.info('Forward pass')
-        for i, _ in enumerate(X):
+        for i, _ in tqdm(enumerate(X), total=len(X), unit='batch', ncols=130, leave=False):
             # Move data to GPU if desired
             X[i] = BaseRoutine().move_to_device(X[i], **kwargs)[0]
             # Forward pass
@@ -114,8 +119,10 @@ def init_model(model, data_loader, init_function, **kwargs):
     # Free some resources, just in case
     del X
     del y
-    del init_input
-    del init_labels
+    if 'init_input' in locals():
+        del init_input
+    if 'init_labels' in locals():
+        del init_labels
     gc.collect()
     pass
 
