@@ -760,17 +760,17 @@ class RunMe:
 
         # Get DeepDIVA root
         cwd = os.getcwd()
-        dd_root = os.path.join(cwd.split('Gale')[0], 'Gale')
+        gale_root = os.path.join(cwd.split('gale')[0], 'gale')
 
-        files = get_all_files_in_folders_and_subfolders(dd_root)
+        files = get_all_files_in_folders_and_subfolders(gale_root)
 
-        # Get all files types in DeepDIVA as specified in FILE_TYPES
+        # Get all files types in Gale as specified in FILE_TYPES
         code_files = [item for item in files if item.endswith(tuple(FILE_TYPES))]
 
         tmp_dir = tempfile.mkdtemp()
 
         for item in code_files:
-            dest = os.path.join(tmp_dir, 'Gale', item.split('Gale')[1][1:])
+            dest = os.path.join(tmp_dir, 'gale', item.split('gale')[1][1:])
             if not os.path.exists(os.path.dirname(dest)):
                 os.makedirs(os.path.dirname(dest))
             shutil.copy(item, dest)
