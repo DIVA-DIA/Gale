@@ -13,6 +13,7 @@ import torch
 from PIL import Image
 from torchvision.transforms import Pad, functional as F
 
+from . import functional as F_custom
 
 ####################################################################################################
 ####################################################################################################
@@ -246,3 +247,48 @@ class TwinImageToTensor(object):
             Tensor: Converted image.
         """
         return F.to_tensor(img), F.to_tensor(gt)
+
+
+class ToTensorSlidingWindowCrop(object):
+    """
+    Crop the data and ground truth image at the specified coordinates to the specified size and convert
+    them to a tensor.
+    """
+    def __init__(self, crop_size):
+        self.crop_size = crop_size
+
+    def __call__(self, img, gt, coordinates):
+        """
+        Args:
+            img (PIL Image): Data image to be cropped and converted to tensor.
+            gt (PIL Image): Ground truth image to be cropped and converted to tensor.
+
+        Returns:
+            Data tensor, gt tensor (tuple of tensors): cropped and converted images
+
+        """
+        x_position = coordinates[0]
+        y_position = coordinates[1]
+
+        return F.to_tensor(F.crop(img, x_position, y_position, self.crop_size, self.crop_size)),\
+               F.to_tensor(F.crop(gt, x_position, y_position, self.crop_size, self.crop_size))
+
+
+class OneHotToPixelLabelling(object):
+    def __call__(self, tensor):
+        return F_custom.argmax_onehot(tensor)
+
+
+class OneHotEncodingDIVAHisDB(object):
+    def __init__(self, class_encodings, use_boundary_pixel=True):
+        self.class_encodings = class_encodings
+        self.use_boundary_pixel = use_boundary_pixel
+
+    def __call__(self, gt):
+        """
+        Args:
+
+        Returns:
+
+        """
+        return F_custom.gt_to_one_hot_hisdb(gt, self.class_encodings, self.use_boundary_pixel)
