@@ -9,15 +9,12 @@ import os
 import os.path
 import random
 import sys
-from pathlib import Path
 
 import numpy as np
 # Torch related stuff
-import pandas as pd
 import torch.utils.data as data
 from torchvision.transforms import ToTensor
 
-from template.runner.semantic_segmentation_DIVAHisDB.util.dataset_analytics import compute_mean_std_segmentation
 # from DeepDIVA
 from util.misc import has_extension, pil_loader
 from .custom.transforms import ToTensorSlidingWindowCrop
@@ -63,66 +60,6 @@ def default_loader(path):
         sys.exit(-1)
 
 
-def load_class_encodings(path, inmem, workers, **kwargs):
-    """
-    This function simply recovers class_encodings from the analytics.csv file
-
-    Parameters
-    ----------
-    path : string
-        Path string that points to the three folder train/val/test. Example: ~/../../data/svhn
-    inmem : boolean
-        Flag: if False, the dataset is loaded in an online fashion i.e. only file names are stored and images are loaded
-        on demand. This is slower than storing everything in memory.
-    workers : int
-        Number of workers to use for the mean/std computation
-
-    Returns
-    -------
-    ndarray[double]
-        Class encodings for the selected dataset, contained in the analytics.csv file.
-    """
-    parent_path = Path(path).parent
-    csv_file = load_analytics_csv(parent_path, inmem, workers, **kwargs)
-    return np.array([x for x in csv_file[csv_file[0] == 'class_encodings'].values[:, 1:] if str(x) != 'nan']).astype(
-        int)
-
-
-def load_analytics_csv(dataset_folder, inmem, workers, **kwargs):
-    """
-    This function loads the analytics.csv file and attempts creating it, if it is missing
-
-    Parameters
-    ----------
-    dataset_folder : string
-        Path string that points to the three folder train/val/test. Example: ~/../../data/svhn
-    inmem : boolean
-        Flag: if False, the dataset is loaded in an online fashion i.e. only file names are stored and images are loaded
-        on demand. This is slower than storing everything in memory.
-    workers : int
-        Number of workers to use for the mean/std computation
-    runner_class: string
-        specifies the runner class (mean and std have to be computed differently for the semantic segmentation)
-
-    Returns
-    -------
-    file
-        The csv file
-    """
-    # If analytics.csv file not present, run the analytics on the dataset
-    if not os.path.exists(os.path.join(dataset_folder, "analytics.csv")):
-        logging.warning('Missing analytics.csv file for dataset located at {}'.format(dataset_folder))
-        try:
-            logging.warning('Attempt creating analytics.csv file for dataset located at {}'.format(dataset_folder))
-            compute_mean_std_segmentation(input_folder=dataset_folder, inmem=inmem, workers=workers, **kwargs)
-            logging.warning('Created analytics.csv file for dataset located at {} '.format(dataset_folder))
-        except:
-            logging.error('Creation of analytics.csv failed.')
-            sys.exit(-1)
-    # Loads the analytics csv
-    return pd.read_csv(os.path.join(dataset_folder, "analytics.csv"), header=None)
-
-
 class ImageFolderSegmentationDataset(data.Dataset):
     """A generic data loader where the images are arranged in this way: ::
 
@@ -135,9 +72,9 @@ class ImageFolderSegmentationDataset(data.Dataset):
         root/data/xxz.png
     """
 
-    def __init__(self, class_encodings, path, workers, imgs_in_memory, crops_per_image, crop_size,
-                 transform=None, img_transform=None, gt_transform=None, loader=default_loader,
-                 is_test=False, **kwargs):
+    def __init__(self, path, workers, imgs_in_memory, crops_per_image, crop_size,
+                 transform=None, target_transform=None, loader=default_loader,
+                 class_encodings=None, **kwargs):
         """
         #TODO doc
         Parameters
@@ -159,16 +96,14 @@ class ImageFolderSegmentationDataset(data.Dataset):
         # Init list
         self.root = path
         self.class_encodings = class_encodings
-        self.num_classes = len(self.class_encodings)
         self.num_workers = workers
         self.imgs_in_memory = imgs_in_memory
         self.crops_per_image = crops_per_image
         self.crop_size = crop_size
         self.transform = transform
-        self.img_transform = img_transform
-        self.gt_transform = gt_transform
+        self.target_transform = target_transform
         self.loader = loader
-        self.is_test = is_test
+        self.is_test = 'test' in self.root
 
         # List of tuples that contain the path to the gt and image that belong together
         self.img_paths = get_gt_data_paths(path)
@@ -349,10 +284,8 @@ class ImageFolderSegmentationDataset(data.Dataset):
         else:
             img, gt = ToTensor()(img), ToTensor()(gt)
 
-        if self.img_transform is not None:
-            img = self.img_transform(img)
-        if self.gt_transform is not None:
-            gt = self.gt_transform(gt)
+        if self.target_transform is not None:
+            gt = self.target_transform(img, gt)
 
         return img, gt
 
