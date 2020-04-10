@@ -58,11 +58,18 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
     def get_split(cls, **kwargs):
         return ImageFolderSegmentationDataset(**kwargs)
 
+    # TRANSFORMATIONS
+    @classmethod
+    def set_up_transforms(cls, train_ds, val_ds, test_ds, **kwargs):
+        super().set_up_transforms(train_ds, val_ds, test_ds, **kwargs)
+        for ds in [train_ds, val_ds, test_ds]:
+            if ds is not None:
+                ds.twin_transform = cls.get_test_transform(**kwargs)
+
     @classmethod
     def get_train_transform(cls, crop_size, **kwargs):
         mean, std = cls.load_mean_std_from_file(**kwargs)
         return OnlyImage(transforms.Compose([
-            TwinRandomCrop(crop_size=crop_size),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
             transforms.ToPILImage()]))
@@ -81,8 +88,13 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
             # transforms the gt image into a one-hot encoded matrix
             custom_transforms.OneHotEncodingDIVAHisDB(class_encodings=trains_ds.class_encodings),
             # transforms the one hot encoding to argmax labels -> for the cross-entropy criterion
-            custom_transforms.OneHotToPixelLabelling(),
-            TwinRandomCrop(crop_size=kwargs['crop_size'])]))
+            custom_transforms.OneHotToPixelLabelling()]))
+
+    @classmethod
+    def get_twin_transformations(cls, **kwargs):
+        return TwinRandomCrop(crop_size=kwargs['crop_size'])
+
+    ###################
 
     @staticmethod
     def output_to_class_encodings(output, class_encodings, perform_argmax=True):
@@ -136,14 +148,14 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
         cls.create_analytics_csv(train_ds=train_ds, **kwargs)
 
         # set class encodings
-        cls_encodings = cls.load_class_encodings_from_file(**kwargs)
+        class_encodings = cls.load_class_encodings_from_file(**kwargs)
         for ds in [train_ds, val_ds, test_ds]:
-            ds.class_encodings = cls_encodings
-            ds.num_classes = len(cls_encodings)
+            ds.class_encodings = class_encodings
+            ds.num_classes = len(class_encodings)
 
         # Setup transforms
         logging.info('Setting up transforms')
-        cls.set_up_transforms(train_ds=train_ds, val_ds=val_ds, test_ds=test_ds, **kwargs)
+        cls.set_up_transforms(train_ds=train_ds, val_ds=val_ds, test_ds=test_ds, class_encodings=class_encodings, **kwargs)
 
         # Get the dataloaders
         train_loader, val_loader, test_loader = cls._dataloaders_from_datasets(train_ds=train_ds,

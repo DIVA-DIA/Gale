@@ -9,11 +9,13 @@ import math
 import random
 from collections import Callable
 
+import numpy as np
 import torch
 from PIL import Image
 from torchvision.transforms import Pad, functional as F
 
 from . import functional as F_custom
+
 
 ####################################################################################################
 ####################################################################################################
@@ -37,6 +39,7 @@ class OnlyImage(object):
     def __call__(self, image, target):
         return self.transform(image), target
 
+
 class OnlyTarget(object):
     """Wrapper function around a single parameter transform. It will be cast only on target"""
 
@@ -53,6 +56,7 @@ class OnlyTarget(object):
 
     def __call__(self, image, target):
         return image, self.transform(target)
+
 
 ####################################################################################################
 ####################################################################################################
@@ -196,6 +200,7 @@ class ResizePad(object):
         img = self.resize_with_padding(img, self.target_size)
         return img
 
+
 ####################################################################################################
 ####################################################################################################
 # Twin Transformations
@@ -239,6 +244,7 @@ class TwinImageToTensor(object):
     Converts a PIL Image or numpy.ndarray (W x H x C) in the range
     [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0].
     """
+
     def __call__(self, img, gt):
         """
         Args:
@@ -254,6 +260,7 @@ class ToTensorSlidingWindowCrop(object):
     Crop the data and ground truth image at the specified coordinates to the specified size and convert
     them to a tensor.
     """
+
     def __init__(self, crop_size):
         self.crop_size = crop_size
 
@@ -270,7 +277,7 @@ class ToTensorSlidingWindowCrop(object):
         x_position = coordinates[0]
         y_position = coordinates[1]
 
-        return F.to_tensor(F.crop(img, x_position, y_position, self.crop_size, self.crop_size)),\
+        return F.to_tensor(F.crop(img, x_position, y_position, self.crop_size, self.crop_size)), \
                F.to_tensor(F.crop(gt, x_position, y_position, self.crop_size, self.crop_size))
 
 

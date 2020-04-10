@@ -73,8 +73,8 @@ class ImageFolderSegmentationDataset(data.Dataset):
     """
 
     def __init__(self, path, workers, imgs_in_memory, crops_per_image, crop_size,
-                 transform=None, target_transform=None, loader=default_loader,
-                 class_encodings=None, **kwargs):
+                 transform=None, target_transform=None, twin_transform=None,
+                 loader=default_loader, class_encodings=None, **kwargs):
         """
         #TODO doc
         Parameters
@@ -100,8 +100,11 @@ class ImageFolderSegmentationDataset(data.Dataset):
         self.imgs_in_memory = imgs_in_memory
         self.crops_per_image = crops_per_image
         self.crop_size = crop_size
+        # transformations
         self.transform = transform
         self.target_transform = target_transform
+        self.twin_transform = twin_transform
+
         self.loader = loader
         self.is_test = 'test' in self.root
 
@@ -273,6 +276,9 @@ class ImageFolderSegmentationDataset(data.Dataset):
         tuple
             img and gt after transformations
         """
+        if self.twin_transform is not None:
+            img, gt = self.twin_transform(img, gt)
+
         if self.transform is not None:
             # perform transformations
             img, gt = self.transform(img, gt)
@@ -285,7 +291,7 @@ class ImageFolderSegmentationDataset(data.Dataset):
             img, gt = ToTensor()(img), ToTensor()(gt)
 
         if self.target_transform is not None:
-            gt = self.target_transform(img, gt)
+            img, gt = self.target_transform(img, gt)
 
         return img, gt
 

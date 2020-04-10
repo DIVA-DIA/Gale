@@ -41,7 +41,8 @@ def gt_to_one_hot_hisdb(matrix, class_encodings, use_boundary_pixel=True):
     integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
     onehot_encoded = onehot_encoder.fit_transform(integer_encoded).astype(np.int8)
 
-    np.place(im_np, im_np == 0, 1) # needed to deal with 0 fillers at the borders during testing (replace with background)
+    np.place(im_np, im_np == 0,
+             1)  # needed to deal with 0 fillers at the borders during testing (replace with background)
     replace_dict = {k: v for k, v in zip(class_encodings, onehot_encoded)}
 
     # create the one hot matrix
@@ -52,3 +53,8 @@ def gt_to_one_hot_hisdb(matrix, class_encodings, use_boundary_pixel=True):
     return torch.LongTensor(one_hot_matrix.transpose((2, 0, 1)))
 
 
+def argmax_onehot(tensor):
+    """
+    # TODO
+    """
+    return torch.LongTensor(np.array(np.argmax(tensor.numpy(), axis=0)))
