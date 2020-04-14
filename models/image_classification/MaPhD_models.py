@@ -124,7 +124,7 @@ class InitBaselineVGGLike(nn.Module):
         f = 32  # Initial number of dimensions
 
         # First layer: bring 32x32 to 28x28
-        self.conv_in = nn.Sequential(nn.Conv2d(3    , f    , bias=cb, kernel_size=3), af())
+        self.conv_in = nn.Sequential(nn.Conv2d(3    , f    , bias=cb, kernel_size=5), af())
         # Block 1: 28x28
         self.conv_b1 = nn.Sequential(nn.Conv2d(f    , f * 2, bias=cb, kernel_size=3, padding=1), af())
         # Block 2: 28x28
