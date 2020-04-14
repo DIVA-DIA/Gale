@@ -183,5 +183,5 @@ class CLArguments(BaseCLArguments):
                                  help="Learning rate for the last layer")
         parser_init.add_argument('--retrain-epochs',
                                  type=int,
-                                 default=100,
+                                 default=20,
                                  help="Number of epochs for the last layer")
