@@ -25,8 +25,8 @@ from template.runner.base.base_routine import BaseRoutine
 
 def init_model(**kwargs):
     """ Initialize a standard CNN composed by convolutional layer followed by fully connected layers."""
-    # if 'random' in kwargs['init_function']:
-    #     return
+    if 'random' in kwargs['init_function']:
+        return
     # Collect initial data
     X, y = _collect_initial_data(**kwargs)
     # Init the model
