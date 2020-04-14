@@ -5,126 +5,156 @@ has two functions) one should implement his own init function.
 """
 
 # Utils
+import copy
 import logging
 import sys
 import time
 from itertools import count
-from threading import Thread
-from tqdm import tqdm
 
 import gc
 import numpy as np
 import psutil
 from sklearn.feature_extraction.image import extract_patches_2d
 from torch import nn
+from tqdm import tqdm
 
 from init import advanced_init
 from init.advanced_init import minibatches_to_matrix
 from template.runner.base.base_routine import BaseRoutine
 
 
-def init_model(model, data_loader, init_function, **kwargs):
-    """
-    Initialize a standard CNN composed by convolutional layer followed by fully
-    connected layers.
+def init_model(**kwargs):
+    """ Initialize a standard CNN composed by convolutional layer followed by fully connected layers."""
+    # if 'random' in kwargs['init_function']:
+    #     return
+    # Collect initial data
+    X, y = _collect_initial_data(**kwargs)
+    # Init the model
+    logging.info('Initializing the model...')
+    _init_module(X=X, y=y, prefix="", **kwargs)
+
+
+def _init_module(X, y, model, prefix, sub_model=None, **kwargs):
+    """Initialize a model passed by argument with the init function chosen.
+
+    This function is used recursively for going deep on those blocks which have children such as nn.Sequential or
+    ResNet-like blocks. When not in the main call, `sub_model` will be not None and will be processed as a whole
+    new model.
 
     Parameters
     ----------
+    X : list(FloatTensor)
+        Input samples structured in batches
+    y : list(IntTensor)
+        Target samples structured in batches (corresponding to X input samples)
     model : DataParallel
         The model to initialize
-    data_loader : torch.utils.data.dataloader.DataLoader
-        The dataloader to take the data from
-    init_function : string
-        Name of the function to use to init the model
+    prefix : str
+        String to pre-pend to logging the layer number
+    sub_model : nn.Module
+        The block of the network to initialize when performing a recursive call of this function
     """
-    if 'random' in init_function:
-       return
+    # Get the list of children to iterate on
+    if sub_model is None:
+        # Main call
+        assert type(model) is nn.DataParallel
+        children_modules = list(list(model.children())[0].children())
+    else:
+        # Recursive calls
+        children_modules = list(sub_model.children())
+    assert children_modules
+    # This is used to slip the downsampling module in ResNet-like architectures as it would fail
+    if hasattr(sub_model, 'downsample') and sub_model.downsample:
+        children_modules = children_modules[:-1]
 
-    # Collect initial data
-    X, y = _collect_initial_data(data_loader=data_loader, **kwargs)
-
-    ###############################################################################################
-    # Iterate over all layers
-    logging.info('Iterate over all layers')
-    memory = psutil.virtual_memory().used
-    for index, layer in enumerate(list(list(model.children())[0].children()), start=1):
-        logging.info(f'\nLayer: {index} - layer: {type(layer)}')
-        compute_parameters = False
-
-        if psutil.virtual_memory().used > memory:
-            logging.info(f"[MEMORY] Higher memory usage: {psutil.virtual_memory().used:,}")
-            memory = psutil.virtual_memory().used
-            deadlock_counter = 0
-            while psutil.virtual_memory().percent > 95:
-                logging.info(f"[MEMORY] Memory usage is above 95%({psutil.virtual_memory().percent}). Sleeping 10 min")
-                deadlock_counter += 1
-                if deadlock_counter > 36:
-                    logging.error(f"[MEMORY] It is 6h that the memory is above 95%. I quit!")
-                    sys.exit(-1)
-                time.sleep(600)
-
-        # SEQUENTIAL LAYER
-        if type(layer) is nn.Sequential and kwargs['model_name'] != 'babyresnet18':
-            # Get module from layer
-            module = get_module_from_sequential_layer(layer)
-        else:
-            module = layer
+    for index, module in enumerate(children_modules, start=1):
+        logging.info(f'\nLayer: {prefix}{index} - module: {type(module)}')
+        _check_memory_usage()
 
         # CONV LAYER
-        if type(module) is nn.Conv2d and kwargs['model_name'] != 'babyresnet18':
-            compute_parameters = True
+        if type(module) is nn.Conv2d:
             # Get the patches in a matrix form
             init_input, init_labels = get_patches(X=X, y=y, kernel_size=module.kernel_size, **kwargs)
+            _compute_and_assign_parameters(
+                init_input=init_input, init_labels=init_labels, model=model, module=module, **kwargs
+            )
 
         # LINEAR LAYER
         if type(module) is nn.Linear:
-            compute_parameters = True
             init_input = X
             init_labels = y
-
-        #######################################################################
-        # Compute data-driven parameters (if a module with weights has been detected in this layer earlier)
-        if compute_parameters:
-            logging.info(f'Compute data-driven parameters with {init_function}')
-            W, B = getattr(advanced_init, init_function)(
-                layer_index=index, init_input=init_input, init_labels=init_labels, model=model, module=module, **kwargs
+            _compute_and_assign_parameters(
+                init_input=init_input, init_labels=init_labels, model=model, module=module, **kwargs
             )
 
-            # Check parameters shape (better safe than sorry...)
-            if module.weight.data.shape != W.shape:
-                logging.error(f"Weight matrix dimension mis-match. Expected {module.weight.data.shape} got {W.shape}")
-                sys.exit(-1)
-            if module.bias is not None and module.bias.data.shape != B.shape:
-                logging.error(f"Bias matrix dimension mis-match. Expected {module.bias.data.shape} got {B.shape}")
-                sys.exit(-1)
-
-            # Assign parameters in-place s.t. the hooks are not broken (e.g. for wandb)
-            logging.info('Assign parameters')
-            W, B = BaseRoutine().move_to_device(W, B, **kwargs)
-            module.weight.data.copy_(W)
-            if module.bias is not None:
-                module.bias.data.copy_(B)
+        # RECURSIVE CALL ON LAYER WITH CHILDREN
+        if list(module.children()):
+            logging.info(f"Deep copying X")
+            tmpx = copy.deepcopy(X)
+            logging.info(f"Done copying X")
+            _init_module(
+                X=tmpx,
+                y=y,
+                model=model,
+                sub_model=module,
+                prefix=f"{prefix}{index}.",
+                **kwargs
+            )
 
         #######################################################################
-        # Forward pass of this layer
-        logging.info('Forward pass')
+        # Forward pass of this module
+        logging.info(f'Forward pass {prefix}{index}')
         for i, _ in tqdm(enumerate(X), total=len(X), unit='batch', ncols=130, leave=False):
             # Move data to GPU if desired
             X[i] = BaseRoutine().move_to_device(X[i], **kwargs)[0]
             # Forward pass
-            X[i] = layer(X[i])
+            X[i] = module(X[i])
             # Bring data back to CPU for further computing data-driven inits
             X[i] = BaseRoutine().move_to_device(X[i], no_cuda=True)[0]
 
-    # Free some resources, just in case
-    del X
-    del y
-    if 'init_input' in locals():
-        del init_input
-    if 'init_labels' in locals():
-        del init_labels
+    # Free resources
+    del X, y
     gc.collect()
-    pass
+
+
+def _compute_and_assign_parameters(module, init_function, **kwargs):
+    """Compute data-driven parameters
+
+    Parameters
+    ----------
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    init_function : string
+        Name of the function to use to init the model
+    """
+    logging.info(f'Compute data-driven parameters with {init_function}')
+    W, B = getattr(advanced_init, init_function)(module=module, **kwargs)
+    # Check parameters shape (better safe than sorry...)
+    if module.weight.data.shape != W.shape:
+        logging.error(f"Weight matrix dimension mis-match. Expected {module.weight.data.shape} got {W.shape}")
+        sys.exit(-1)
+    if module.bias is not None and module.bias.data.shape != B.shape:
+        logging.error(f"Bias matrix dimension mis-match. Expected {module.bias.data.shape} got {B.shape}")
+        sys.exit(-1)
+    # Assign parameters in-place s.t. the hooks are not broken (e.g. for wandb)
+    logging.info('Assign parameters')
+    W, B = BaseRoutine().move_to_device(W, B, **kwargs)
+    module.weight.data.copy_(W)
+    if module.bias is not None:
+        module.bias.data.copy_(B)
+
+
+def _check_memory_usage():
+    """ Checks if the memory usage is below a threshold; otherwise sleeps until it is"""
+    MEMORY_THRESHOLD = 80
+    deadlock_counter = 0
+    while psutil.virtual_memory().percent > MEMORY_THRESHOLD:
+        logging.info(f"[MEMORY] Memory usage is above {MEMORY_THRESHOLD}%({psutil.virtual_memory().percent}). Sleeping 10 min")
+        deadlock_counter += 1
+        if deadlock_counter > 36:
+            logging.error(f"[MEMORY] It is 6h that the memory is above {MEMORY_THRESHOLD}%. I quit!")
+            sys.exit(-1)
+        time.sleep(600)
 
 
 def _collect_initial_data(data_loader, num_samples, **kwargs):
@@ -158,7 +188,7 @@ def _collect_initial_data(data_loader, num_samples, **kwargs):
     # If not specified take the entire dataset
     if num_samples is None:
         num_samples = len(data_loader.dataset)
-        
+
     X = []
     y = []
     # This is necessary because last batches might not have size mini-batch but smaller!
@@ -221,12 +251,13 @@ def get_patches(X, y, kernel_size, patches_cap, **kwargs):
     labels : ndarray(N*patch_per_image,)
         List of labels for each of the elements of 'all_patches'
     """
-    # Prepare the input data into a ndarray form
-    tmp_X = np.array([e.data.numpy() for minibatch in X for e in minibatch])
+    logging.info("Preparing data for collecting patches out of samples")
+    # Prepare the input data into a list and ndarray form
+    tmp_X = [e.data.numpy() for minibatch in X for e in minibatch]
     tmp_y = minibatches_to_matrix(y)
 
     # Compute the total amount of possible patches to be extracted from one sample
-    possible_patches_per_sample = (tmp_X.shape[2] - kernel_size[0] + 1) * (tmp_X.shape[3] - kernel_size[1] + 1)
+    possible_patches_per_sample = (tmp_X[0].shape[1] - kernel_size[0] + 1) * (tmp_X[0].shape[2] - kernel_size[1] + 1)
     # Set max_patches accordingly in order to either meet the cap or take all the samples
     num_samples = len(tmp_y)
     if patches_cap >= possible_patches_per_sample * num_samples:
@@ -236,7 +267,7 @@ def get_patches(X, y, kernel_size, patches_cap, **kwargs):
 
     logging.info(
         f'Get {max_patches} patches of kernel size {kernel_size}'
-        f' from {num_samples} samples of size ({tmp_X.shape[1]}x{tmp_X.shape[2]}x{tmp_X.shape[3]})'
+        f' from {num_samples} samples of size ({tmp_X[0].shape[0]}x{tmp_X[0].shape[1]}x{tmp_X[0].shape[2]})'
     )
 
     # Init the return values
