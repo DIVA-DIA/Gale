@@ -97,7 +97,7 @@ class BabyResNet(nn.Module):
             nn.MaxPool2d(kernel_size=3, stride=1, padding=0),
         )
 
-        # Bulk part of the ResNet with four groups of blocks (expected size: 56x56x64)
+        # Bulk part of the ResNet with four groups of blocks (expected size: 28x28x128)
         self.conv3x = self._make_layer(block_type, 128, num_block[1])
         self.conv4x = self._make_layer(block_type, 256, num_block[2], stride=2)
         self.conv5x = self._make_layer(block_type, 512, num_block[3], stride=2)
