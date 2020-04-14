@@ -1160,8 +1160,8 @@ def greedya(
             sys.exit(-1)
 
         # Init W with the default values
-        # W = _flatten_conv_filters(module.weight.data.cpu().numpy())
-        W = np.zeros_like(_flatten_conv_filters(module.weight.data.cpu().numpy()))
+        W = _flatten_conv_filters(module.weight.data.cpu().numpy())
+        # W = np.zeros_like(_flatten_conv_filters(module.weight.data.cpu().numpy()))
         start_index = 0
 
         # ----------------------------------------------------------------------------------------------
