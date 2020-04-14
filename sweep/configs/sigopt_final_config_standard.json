@@ -1,14 +1,20 @@
 [
-    {
-        "name": "weight-decay",
-        "type": "double",
-        "precision": 5,
-        "bounds": {"max": 0.003, "min": 0.0}
-    },
-    {
-        "name": "lr",
-        "type": "double",
-        "precision": 5,
-        "bounds": {"max": 0.03, "min": 0.0003}
+  {
+    "name": "weight-decay",
+    "type": "double",
+    "precision": 5,
+    "bounds": {
+      "max": 0.003,
+      "min": 0.0
     }
+  },
+  {
+    "name": "lr",
+    "type": "double",
+    "precision": 5,
+    "bounds": {
+      "max": 0.03,
+      "min": 0.0003
+    }
+  }
 ]

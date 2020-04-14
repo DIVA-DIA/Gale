@@ -129,7 +129,6 @@ class BaseCLArguments:
                                    type=str,
                                    help='path to a JSON file containing sigopt conditionals')
 
-
     def _darwin_options(self):
         """ SigOpt options"""
 
@@ -253,7 +252,8 @@ class BaseCLArguments:
         """ Options specific for optimizers """
         # List of possible optimizers already implemented in PyTorch
         optimizer_options = [name for name in torch.optim.__dict__ if callable(torch.optim.__dict__[name])]
-        lrscheduler_options = [name for name in torch.optim.lr_scheduler.__dict__ if callable(torch.optim.lr_scheduler.__dict__[name])]
+        lrscheduler_options = [name for name in torch.optim.lr_scheduler.__dict__ if
+                               callable(torch.optim.lr_scheduler.__dict__[name])]
         parser_optimizer = self.parser.add_argument_group('OPTIMIZER', 'Optimizer Options')
 
         parser_optimizer.add_argument('--optimizer-name',

@@ -217,29 +217,22 @@ class ConfusionMatrix(Meter):
             None
         """
         if class_names is None:
-            class_names = list(range(0,self.num_classes))
+            class_names = list(range(0, self.num_classes))
 
         acc, pre, rec, iou, sup = self.compute()
         # The weird formatting is a fix for TB writer.
         # Its an ugly workaround to have it printed nicely in the TEXT section of TB.
         s = (
-            f"\n\n       "
-            f"{'{:>20}'.format(' ')} \t"                + f"{''.join(['{:^20}'.format(i) for i in class_names])}\n\n       "
-            f"{'{:>20}'.format('support')}:\t"          + f"{''.join(['{:^20}'.format(i) for i in sup])}\n\n       "
-            f"{'{:>20}'.format('precision')}:\t"        + f"{''.join(['{:^20.1f}'.format(i) for i in pre * 100])}\n\n       "
-            f"{'{:>20}'.format('recall')}:\t"           + f"{''.join(['{:^20.1f}'.format(i) for i in rec * 100])}\n\n       "
-            f"{'{:>20}'.format('IoU')}:\t"              + f"{''.join(['{:^20.1f}'.format(i) for i in iou * 100])}\n\n       "
-            f"{'{:>20}'.format('mean IoU')}:\t"         + f"{iou.mean() * 100:.1f}\n\n       "
-            f"{'{:>20}'.format('accuracy')}:\t"   + f"{acc * 100:.1f}\n\n       "
+                f"\n\n       "
+                f"{'{:>20}'.format(' ')} \t" + f"{''.join(['{:^20}'.format(i) for i in class_names])}\n\n       "
+                                               f"{'{:>20}'.format('support')}:\t" + f"{''.join(['{:^20}'.format(i) for i in sup])}\n\n       "
+                                                                                    f"{'{:>20}'.format('precision')}:\t" + f"{''.join(['{:^20.1f}'.format(i) for i in pre * 100])}\n\n       "
+                                                                                                                           f"{'{:>20}'.format('recall')}:\t" + f"{''.join(['{:^20.1f}'.format(i) for i in rec * 100])}\n\n       "
+                                                                                                                                                               f"{'{:>20}'.format('IoU')}:\t" + f"{''.join(['{:^20.1f}'.format(i) for i in iou * 100])}\n\n       "
+                                                                                                                                                                                                f"{'{:>20}'.format('mean IoU')}:\t" + f"{iou.mean() * 100:.1f}\n\n       "
+                                                                                                                                                                                                                                      f"{'{:>20}'.format('accuracy')}:\t" + f"{acc * 100:.1f}\n\n       "
         )
         return s
-
-
-
-
-
-
-
 
 
 # TODO: syncronize with Michele

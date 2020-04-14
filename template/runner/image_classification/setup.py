@@ -2,7 +2,6 @@
 import os
 from pathlib import Path
 
-import torchvision
 from torchvision.transforms import transforms, RandomResizedCrop, RandomRotation
 
 # Gale
@@ -30,7 +29,7 @@ class ImageClassificationSetup(BaseSetup):
         std : ndarray[double]
             Standard deviation (for each channel) of all pixels of the images in the input folder
         """
-        return compute_mean_std(input_folder =os.path.join(input_folder, 'train'), **kwargs)
+        return compute_mean_std(input_folder=os.path.join(input_folder, 'train'), **kwargs)
 
     @classmethod
     def _measure_weights(cls, input_folder, **kwargs):
@@ -46,7 +45,7 @@ class ImageClassificationSetup(BaseSetup):
         class_weights : ndarray[double]
             Weight for each class in the train set (one for each class)
         """
-        return get_class_weights(input_folder =os.path.join(input_folder, 'train'), **kwargs)
+        return get_class_weights(input_folder=os.path.join(input_folder, 'train'), **kwargs)
 
     @classmethod
     def get_darwin_datasets(cls, input_folder: Path, split_folder: Path, split_type: str, **kwargs):

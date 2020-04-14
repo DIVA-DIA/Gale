@@ -1,6 +1,9 @@
 import math
+
 import torch.nn as nn
+
 from models.registry import Model
+
 
 class Flatten(nn.Module):
     """
@@ -303,6 +306,8 @@ def babyresnet18(**kwargs):
         The model of the network
     """
     return BabyResNet(_BasicBlock, [0, 4, 2, 2], **kwargs)
+
+
 babyresnet18.expected_input_size = BabyResNet.expected_input_size
 
 
@@ -317,6 +322,8 @@ def babyresnet34(**kwargs):
         The model of the network
     """
     return BabyResNet(_BasicBlock, [0, 7, 6, 3], **kwargs)
+
+
 babyresnet34.expected_input_size = BabyResNet.expected_input_size
 
 
@@ -331,7 +338,10 @@ def babyresnet50(**kwargs):
         The model of the network
     """
     return BabyResNet(_Bottleneck, [0, 7, 6, 3], **kwargs)
+
+
 babyresnet50.expected_input_size = BabyResNet.expected_input_size
+
 
 @Model
 def babyresnet101(**kwargs):
@@ -344,6 +354,8 @@ def babyresnet101(**kwargs):
         The model of the network
     """
     return BabyResNet(_Bottleneck, [0, 7, 23, 3], **kwargs)
+
+
 babyresnet101.expected_input_size = BabyResNet.expected_input_size
 
 
@@ -358,4 +370,6 @@ def babyresnet152(**kwargs):
         The model of the network
     """
     return BabyResNet(_Bottleneck, [0, 11, 36, 3], **kwargs)
+
+
 babyresnet152.expected_input_size = BabyResNet.expected_input_size

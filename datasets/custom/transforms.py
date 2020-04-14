@@ -9,7 +9,6 @@ import math
 import random
 from collections import Callable
 
-import numpy as np
 import torch
 from PIL import Image
 from torchvision.transforms import Pad, functional as F

@@ -1,13 +1,11 @@
 # DeepDIVA
-import logging
-import traceback
-import warnings
 
 import numpy as np
+
 from evaluation.metrics import accuracy
 from util.metric_logger import MetricLogger
-from util.TB_writer import TBWriter
 from .train import ImageClassificationTrain
+
 
 class ImageClassificationEvaluate(ImageClassificationTrain):
 
@@ -29,24 +27,25 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
         MetricLogger().add_confusion_matrix_meter(tag='confusion_matrix', num_classes=num_classes)
 
     @classmethod
-    def run_one_mini_batch(cls, model, criterion, input, target, **kwargs):
+    def run_one_mini_batch(cls, model, criterion, input_img, target, **kwargs):
         """See parent method for documentation"""
         # Compute output
-        output = model(input)
+        output = model(input_img)
 
         # Unpack the target
         target = target['category_id']
 
         # Compute and record the loss
         loss = criterion(output, target)
-        MetricLogger().update(key='loss', value=loss.item(), n=len(input))
+        MetricLogger().update(key='loss', value=loss.item(), n=len(input_img))
 
         # Compute and record the accuracy
         acc = accuracy(output.data, target.data, topk=(1,))[0]
-        MetricLogger().update(key='accuracy', value=acc[0], n=len(input))
+        MetricLogger().update(key='accuracy', value=acc[0], n=len(input_img))
 
         # Update the confusion matrix
-        MetricLogger().update(key='confusion_matrix', p=np.argmax(output.data.cpu().numpy(), axis=1), t=target.cpu().numpy())
+        MetricLogger().update(key='confusion_matrix', p=np.argmax(output.data.cpu().numpy(), axis=1),
+                              t=target.cpu().numpy())
 
     @classmethod
     def end_of_the_epoch(cls, data_loader, epoch, logging_label, multi_run_label, **kwargs):

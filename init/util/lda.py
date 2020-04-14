@@ -4,7 +4,6 @@ Linear Discriminant Analysis Algorithm
 It computes both the transformation matrix and the linear discriminants
 """
 
-import logging
 import numpy as np
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 

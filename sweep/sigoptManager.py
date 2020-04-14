@@ -1,4 +1,3 @@
-import sys
 from sigopt import Connection
 
 
@@ -14,6 +13,7 @@ def retrieve_id_by_name(experiment_list, parts):
         if all(p in n.name for p in parts):
             retrieved.append(n.id)
     return retrieved
+
 
 def print_with_pattern(experiment_list, parts):
     dict = {}
@@ -33,7 +33,7 @@ def print_with_pattern_multimetric(experiment_list, parts):
         if all(p in n.name for p in parts):
             efficient_results = conn.experiments(n.id).best_assignments().fetch()
             if efficient_results.data:
-                dict[n.name] = [[d.value for d in data.values] for data in efficient_results.data ]
+                dict[n.name] = [[d.value for d in data.values] for data in efficient_results.data]
     for i in sorted(dict):
         print(f'{i:75}')
         for e in dict[i]:
@@ -66,13 +66,14 @@ def print_best_assignement_with_pattern(experiment_list, parts):
                       "cd `ls`\n",
                       "cd `ls`\n",
                       "cd `ls`\n",
-                      "cp -r `ls` /local/scratch/albertim/best/{}{}".format(experiment.name.split("/")[0],experiment.name.split("/")[-1]),  "\n",
+                      "cp -r `ls` /local/scratch/albertim/best/{}{}".format(experiment.name.split("/")[0],
+                                                                            experiment.name.split("/")[-1]), "\n",
                       "cd /local/scratch/albertim/output")
 
 
 if __name__ == '__main__':
     SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-    #SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+    # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 
     conn = Connection(client_token=SIGOPT_TOKEN)
 
@@ -81,8 +82,7 @@ if __name__ == '__main__':
     for experiment in conn.experiments().fetch().iterate_pages():
         experiment_list.append(experiment)
 
-
-    #print_with_pattern(experiment_list, ["omg"])
+    # print_with_pattern(experiment_list, ["omg"])
     # print_with_pattern(experiment_list, ["CSG18", "v3"])
     # print_with_pattern(experiment_list, ["CSG863", "v3"])
 
@@ -90,6 +90,6 @@ if __name__ == '__main__':
 
     print("--------------------------------------------")
 
-    #print_best_assignement_with_pattern(experiment_list, ["v2", "Deep"])
+    # print_best_assignement_with_pattern(experiment_list, ["v2", "Deep"])
 
     print("Done!")

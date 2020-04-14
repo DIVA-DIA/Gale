@@ -6,23 +6,21 @@
  file 'LICENSE.txt', which is part of this source code package.
 """
 
-
-import models
-import warnings
 import argparse
 import re
 import traceback
+import warnings
+
+import models
 
 
 def list_all_model_parameters():
-
     for model_name in models.__dict__:
         m = models.__dict__[model_name]
         _print_model_parameters(m)
 
 
 def list_model_parameters_by_pattern(pattern):
-
     for model_name in models.__dict__:
         if re.search(pattern, model_name):
             m = models.__dict__[model_name]
@@ -30,7 +28,6 @@ def list_model_parameters_by_pattern(pattern):
 
 
 def _print_model_parameters(model):
-
     if callable(model):
         try:
             model = model(num_classes=10, output_channels=10, pretrained=False)
@@ -70,4 +67,3 @@ if __name__ == "__main__":
     else:
         print("Invalid CL arguments")
         parser.print_help()
-

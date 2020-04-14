@@ -1,12 +1,11 @@
 # Gale
 from init.initializer import init_model
 from template.runner.base import BaseRunner
-
-
+from .evaluate import ImageClassificationEvaluate
 # Delegated
 from .setup import ImageClassificationSetup
 from .train import ImageClassificationTrain
-from .evaluate import ImageClassificationEvaluate
+
 
 class ImageClassification(BaseRunner):
 
@@ -18,7 +17,7 @@ class ImageClassification(BaseRunner):
             (strategy design pattern) Object responsible for setup operations
         """
         super().__init__()
-        self.setup =  ImageClassificationSetup()
+        self.setup = ImageClassificationSetup()
 
     ####################################################################################################################
     def prepare(self, init=False, **kwargs) -> dict:

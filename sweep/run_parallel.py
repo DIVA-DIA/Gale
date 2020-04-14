@@ -1,4 +1,3 @@
-import multiprocessing as mp
 import os
 import sys
 import time
@@ -6,7 +5,6 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 
 import numpy as np
-import torch
 from sigopt import Connection
 
 from template.RunMe import RunMe
@@ -26,16 +24,15 @@ NUM_GPUs = [1, 2, 3, 4, 5, 6, 7]
 CPU_CORES = 30
 SERVER = 'lucy'
 SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
-OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
+OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
 EXPERIMENT_NAME_PREFIX = "sbgatto"
-EPOCHS = 50 # For CB55 is /5
-SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
+EPOCHS = 50  # For CB55 is /5
+SIGOPT_RUNS = None  # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = 5
 # RUNS_PER_VARIANCE = 5
 PROCESSES_PER_GPU = 8
-
 
 ##########################################################################
 
@@ -60,11 +57,11 @@ DATASETS = [
 
 # (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
-    ("randisco",        175325, "", None),
-    ("pure_lda",        175326, "", None),
-    ("pure_pca",        175327, "", None),
-    ("pcdisc",          175328, "", None),
-    ("lpca",            175329, "", None),
+    ("randisco", 175325, "", None),
+    ("pure_lda", 175326, "", None),
+    ("pure_pca", 175327, "", None),
+    ("pcdisc", 175328, "", None),
+    ("lpca", 175329, "", None),
 
     # ("mirror_lda",      None, "", None),
     # ("highlander_lda",  None, "", None),
@@ -72,6 +69,7 @@ RUNS = [
     # ("reverse_pca",     None, "", None),
     # ("relda",           None, "", None),
 ]
+
 
 ##########################################################################
 # Creating Experiments
@@ -172,7 +170,7 @@ class ExperimentsBuilder(object):
                             model_name=model,
                             output_folder=output_folder,
                             input_folder=dataset,
-                            epochs=epochs, #int(epochs/5) if "CB55" in dataset else epochs,
+                            epochs=epochs,  # int(epochs/5) if "CB55" in dataset else epochs,
                             init=init,
                             additional=additional
                         ))
@@ -240,15 +238,15 @@ class ExperimentsBuilder(object):
 class Experiment(object):
     def __init__(
             self,
-            experiment_name : str,
-            model_name : str,
-            output_folder : str,
-            input_folder : str,
-            epochs : int ,
-            init : str,
-            additional : str,
-            gpu_index : int = None,
-            cpu_list : str = None,
+            experiment_name: str,
+            model_name: str,
+            output_folder: str,
+            input_folder: str,
+            epochs: int,
+            init: str,
+            additional: str,
+            gpu_index: int = None,
+            cpu_list: str = None,
     ):
         self.experiment_name = experiment_name
         self.model_name = model_name
@@ -341,9 +339,9 @@ def run_experiments(gpu_indexes, processes_per_gpu, queue):
     for p in processes:
         p.join()
 
+
 ##########################################################################
 if __name__ == '__main__':
-
     # Init queue item
     queue = Queue()
 

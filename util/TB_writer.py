@@ -1,12 +1,15 @@
 # Utils
-import os
 import logging
+import os
+
 import numpy as np
 from PIL import Image
 from tensorboardX import SummaryWriter
 
+
 class Singleton(type):
     _instances = {}
+
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             cls._instances[cls] = super().__call__(*args, **kwargs)
@@ -26,13 +29,13 @@ class TBWriter(metaclass=Singleton):
     def add_text(self, tag, text_string, global_step=None, walltime=None):
         """Wrapper around SummaryWriter method"""
         if self.wandb_project:
-            self.wandb.log({tag : self.wandb.Table(data=text_string, columns=["Text"]), 'epoch' : global_step})
+            self.wandb.log({tag: self.wandb.Table(data=text_string, columns=["Text"]), 'epoch': global_step})
         self.writer.add_text(tag=tag, text_string=text_string, global_step=global_step, walltime=walltime)
 
     def add_scalar(self, tag, scalar_value, global_step=None, walltime=None):
         """Wrapper around SummaryWriter method"""
         if self.wandb_project:
-            self.wandb.log({tag : scalar_value, 'epoch' : global_step})
+            self.wandb.log({tag: scalar_value, 'epoch': global_step})
         self.writer.add_scalar(tag=tag, scalar_value=scalar_value, global_step=global_step, walltime=walltime)
 
     def close(self):
@@ -82,7 +85,7 @@ class TBWriter(metaclass=Singleton):
 
         # Check that it is not single channel grayscale
         if len(image.shape) == 2:  # 2D matrix (W x H)
-            image = np.stack((image,)*3, axis=-1)
+            image = np.stack((image,) * 3, axis=-1)
         assert (len(image.shape) == 3)  # 3D matrix (W x H x C)
 
         # Check that the last channel is of size 3 for RGB
@@ -126,7 +129,7 @@ class TBWriter(metaclass=Singleton):
 
         # Log image to Tensorboard/WandB
         if self.wandb_project:
-            self.wandb.log({tag + '_epoch' : self.wandb.Image(image), 'epoch' : global_step})
+            self.wandb.log({tag + '_epoch': self.wandb.Image(image), 'epoch': global_step})
         self.writer.add_image(tag=tag, img_tensor=image, global_step=global_step, dataformats='HWC')
 
         # Get output folder using the FileHandler from the logger.

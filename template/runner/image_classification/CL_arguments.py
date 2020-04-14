@@ -3,6 +3,7 @@ import argparse
 from init import advanced_init
 from template.runner.base import BaseCLArguments
 
+
 class CLArguments(BaseCLArguments):
 
     def __init__(self):
@@ -21,21 +22,21 @@ class CLArguments(BaseCLArguments):
 
         # Inject wisdom for default parameters based on the init function
         init_function = args.init_function
-        if init_function == "randisco":    # x x x 1 1 0
+        if init_function == "randisco":  # x x x 1 1 0
             args.lin_normalize = 1
             args.lin_standardize = 1
 
-        if init_function is "pure_lda":    # 0 1 1 1 0 0
+        if init_function is "pure_lda":  # 0 1 1 1 0 0
             args.conv_standardize = 1
             args.conv_scale = 1
             args.lin_normalize = 1
 
-        if init_function == "pure_pca":    # 1 1 1 x x x
+        if init_function == "pure_pca":  # 1 1 1 x x x
             args.conv_normalize = 1
             args.conv_standardize = 1
             args.conv_scale = 1
 
-        if init_function == "pcdisc":      # 1 1 1 1 1 1
+        if init_function == "pcdisc":  # 1 1 1 1 1 1
             args.conv_normalize = 1
             args.conv_standardize = 1
             args.conv_scale = 1
@@ -43,7 +44,7 @@ class CLArguments(BaseCLArguments):
             args.lin_standardize = 1
             args.lin_scale = 1
 
-        if init_function == "lpca":        # 0 0 1 1 0 0
+        if init_function == "lpca":  # 0 0 1 1 0 0
             args.conv_scale = 1
             args.lin_normalize = 1
 
@@ -85,7 +86,6 @@ class CLArguments(BaseCLArguments):
                                       default=0,
                                       type=float,
                                       help="If present, specifies the random rotation degrees", )
-
 
     def _init_options(self):
         """

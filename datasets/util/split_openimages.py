@@ -1,22 +1,23 @@
-import sys
 import os
 import os.path as osp
+import sys
+
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from PIL import Image
+from tqdm import tqdm
 
 
 def get_images_and_masks(classes_id, min_pixels, partition, path_annot, mode=""):
     df = pd.read_csv(osp.join(path_annot, 'validation', 'validation-annotations-object-segmentation.csv'))
     kept = df.loc[df['LabelName'].isin(classes_id)]
     mv = [osp.join('validation/masks', e) for e in kept['MaskPath'].tolist()]
-    iv = [osp.join('validation', e+'.jpg') for e in kept['ImageID'].tolist()]
+    iv = [osp.join('validation', e + '.jpg') for e in kept['ImageID'].tolist()]
 
     df = pd.read_csv(osp.join(path_annot, 'test', 'test-annotations-object-segmentation.csv'))
     kept = df.loc[df['LabelName'].isin(classes_id)]
     mte = [osp.join('test/masks', e) for e in kept['MaskPath'].tolist()]
-    ite = [osp.join('test', e+'.jpg') for e in kept['ImageID'].tolist()]
+    ite = [osp.join('test', e + '.jpg') for e in kept['ImageID'].tolist()]
 
     maskpaths = mv + mte
     impaths = iv + ite
@@ -25,7 +26,7 @@ def get_images_and_masks(classes_id, min_pixels, partition, path_annot, mode="")
         df = pd.read_csv(osp.join(path_annot, 'train', 'train-annotations-object-segmentation.csv'))
         kept = df.loc[df['LabelName'].isin(classes_id)]
         mtr = [osp.join('train/masks', e) for e in kept['MaskPath'].tolist()]
-        itr = [osp.join('train', e+'.jpg') for e in kept['ImageID'].tolist()]
+        itr = [osp.join('train', e + '.jpg') for e in kept['ImageID'].tolist()]
 
         maskpaths += mtr
         impaths += itr
@@ -54,7 +55,7 @@ def get_images_and_masks(classes_id, min_pixels, partition, path_annot, mode="")
         ymax = np.max(pos[0])
         w = xmax - xmin
         h = ymax - ymin
-        if np.min((h, w)) < min_pixels or h*w < min_pixels*80:
+        if np.min((h, w)) < min_pixels or h * w < min_pixels * 80:
             continue
         fm.write('{}\n'.format(m))
         fi.write('{}\n'.format(im))
@@ -72,14 +73,14 @@ if mode == "lite":
 else:
     min_pixels = 50
 
-
 root = osp.join(os.environ['DB_ROOT'], 'OpenImages')
 path_images = osp.join(root, 'images')
 path_annot = osp.join(root, 'annotations')
 
 all_classes = pd.read_csv(osp.join(root, 'metadata/class-descriptions-boxable.csv'), names=['ID', 'name'])
 
-val_classes = ['Lion', 'Duck', 'Bus', 'Croissant', 'Panda', 'Parrot', 'Hammer', 'Airplane', 'Apple', 'Ambulance', 'Harmonica', 'Washing machine', 'Lighthouse', 'Hot dog', 'Hamburger']
+val_classes = ['Lion', 'Duck', 'Bus', 'Croissant', 'Panda', 'Parrot', 'Hammer', 'Airplane', 'Apple', 'Ambulance',
+               'Harmonica', 'Washing machine', 'Lighthouse', 'Hot dog', 'Hamburger']
 
 val_classes_id = set(all_classes.loc[all_classes['name'].isin(val_classes)]['ID'].tolist())
 train_classes_id = set(all_classes.loc[~all_classes['name'].isin(val_classes)]['ID'].tolist())

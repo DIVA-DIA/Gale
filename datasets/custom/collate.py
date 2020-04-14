@@ -1,12 +1,13 @@
 # Utils
 import logging
-import numpy as np
 from collections import defaultdict
 from itertools import chain
 from operator import methodcaller
 
+import numpy as np
 # Torch related stuff
 import torch
+
 
 def _cat_tensors(tensors):
     """
@@ -23,6 +24,7 @@ def _cat_tensors(tensors):
     torch.Tensor : images[0].dtype
         A tensor of size `batch_shape` containing all the images stacked
     """
+
     def _cat_regular_tensor(tensors):
         # Batch shape is: b_size x Channels (e.g RBG) x W x H
         batch_shape = [len(tensors), *tensors[0].shape]
@@ -101,6 +103,7 @@ def _cat(cat_list):
 
     # When all else fails...
     return torch._utils.collate.default_collate(cat_list)
+
 
 def collate_fn(batch):
     """

@@ -155,7 +155,8 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
 
         # Setup transforms
         logging.info('Setting up transforms')
-        cls.set_up_transforms(train_ds=train_ds, val_ds=val_ds, test_ds=test_ds, class_encodings=class_encodings, **kwargs)
+        cls.set_up_transforms(train_ds=train_ds, val_ds=val_ds, test_ds=test_ds, class_encodings=class_encodings,
+                              **kwargs)
 
         # Get the dataloaders
         train_loader, val_loader, test_loader = cls._dataloaders_from_datasets(train_ds=train_ds,

@@ -23,6 +23,7 @@ from template.RunMe import RunMe
 INPUT_PATH = Path().absolute() / 'test_data'
 OUTPUT_PATH = Path().absolute() / 'test_output'
 
+
 @pytest.fixture(autouse=True)
 def run_around_tests():
     # Prepare the folders
@@ -37,6 +38,7 @@ def run_around_tests():
     shutil.rmtree(INPUT_PATH)
     shutil.rmtree(OUTPUT_PATH)
     print("Done!")
+
 
 def test_local_dataset():
     """
@@ -116,4 +118,3 @@ def test_darwin_dataset():
 
     assert payload['test'] is not None
     assert isinstance(payload['test'], float)
-

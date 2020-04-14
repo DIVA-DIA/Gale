@@ -10,10 +10,11 @@ import os
 import sys
 import traceback
 from abc import abstractmethod
+
 import numpy as np
+
 import models
 from template.runner.base import AbstractRunner
-
 # Delegated
 from template.runner.base.base_setup import BaseSetup
 from util.TB_writer import TBWriter
@@ -121,11 +122,13 @@ class BaseRunner(AbstractRunner):
         logging.info('Model {} expects input size of {}'.format(model_name, model_expected_input_size))
 
         # Setting up the dataloaders
-        train_loader, val_loader, test_loader, num_classes = self.setup.set_up_dataloaders(model_expected_input_size=model_expected_input_size,
-                                                                                           **kwargs)
+        train_loader, val_loader, test_loader, num_classes = self.setup.set_up_dataloaders(
+            model_expected_input_size=model_expected_input_size,
+            **kwargs)
 
         # Setting up model, optimizer, criterion
-        model = self.setup.setup_model(model_name=model_name, num_classes=num_classes, train_loader=train_loader, **kwargs)
+        model = self.setup.setup_model(model_name=model_name, num_classes=num_classes, train_loader=train_loader,
+                                       **kwargs)
         optimizer = self.setup.get_optimizer(model=model, **kwargs)
         criterion = self.setup.get_criterion(**kwargs)
 

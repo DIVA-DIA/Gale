@@ -28,6 +28,7 @@ import colorlog
 import numpy as np
 # Torch related stuff
 import torch
+
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # SigOpt
@@ -39,6 +40,7 @@ from util.TB_writer import TBWriter
 from util.misc import get_all_files_in_folders_and_subfolders
 from util.misc import to_capital_camel_case
 from visualization.mean_std_plot import plot_mean_std
+
 
 ########################################################################################################################
 
@@ -91,7 +93,7 @@ class RunMe:
                 del sweep_parameters['_wandb']
                 for k, v in sweep_parameters.items():
                     # Update with parameters from the wandb.config s.t. we get the parameters from the sweep
-                    args.update({k:v})
+                    args.update({k: v})
                     # Append their key:value to the experiment name for clarity in the name on the Website
                     args['experiment_name'] += "_" + str(k) + ":" + str(v)
             # Provide all the parameters as configurations to Wandb
@@ -272,14 +274,14 @@ class RunMe:
 
         # Create the metrics for the experiments
         metrics = [{
-            'name' : "validation_accuracy",
-            'objective' : "maximize",
-            'threshold' : 0
+            'name': "validation_accuracy",
+            'objective': "maximize",
+            'threshold': 0
         }]
         if minimize_best_epoch:
             metrics.append({
-                'name' : "best_epoch",
-                'objective' : "minimize",
+                'name': "best_epoch",
+                'objective': "minimize",
             })
 
         # If specified, load the conditionals
@@ -326,6 +328,7 @@ class RunMe:
         return_value : dict
             Dictionary with the return value of the runner
         """
+
         def get_all_concrete_subclasses(class_name):
             csc = set()  # concrete subclasses
             if not inspect.isabstract(class_name):
@@ -337,7 +340,8 @@ class RunMe:
         # Set up logging
         # Don't use args.output_folder as that breaks when using SigOpt
         unpacked_args = {'ignoregit': ignoregit, 'runner_class': runner_class, 'multi_run': multi_run, 'quiet': quiet}
-        current_log_folder = cls._set_up_logging(parser=RunMe.parser, quiet=quiet, args_dict={**kwargs, **unpacked_args},
+        current_log_folder = cls._set_up_logging(parser=RunMe.parser, quiet=quiet,
+                                                 args_dict={**kwargs, **unpacked_args},
                                                  **kwargs)
 
         # Copy the code into the output folder
@@ -370,7 +374,8 @@ class RunMe:
             return_value = cls._multi_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
         else:
             try:
-                return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
+                return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args,
+                                                         **kwargs)
             except Exception as exp:
                 return_value = cls._log_failure(exp, **kwargs)
                 TBWriter().add_scalar(tag='test/accuracy', scalar_value=return_value['test'])
@@ -401,6 +406,7 @@ class RunMe:
         payload : dict
             Dictionary with the payload to return after inference
         """
+
         def get_all_concrete_subclasses(class_name):
             csc = set()  # concrete subclasses
             if not inspect.isabstract(class_name):
@@ -474,7 +480,8 @@ class RunMe:
             except Exception as exp:
                 return_value = cls._log_failure(exp, epochs)
 
-            train_all[i, :], val_all[i, :], test_all[i] = (return_value['train'], return_value['val'], return_value['test'])
+            train_all[i, :], val_all[i, :], test_all[i] = (
+            return_value['train'], return_value['val'], return_value['test'])
 
             # Generate and add to TB the shaded plot for train
             train_curve = plot_mean_std(arr=train_all[:i + 1],
@@ -531,6 +538,7 @@ class RunMe:
         parser : ArgumentParser
             Parser used to process the arguments
         """
+
         def get_runner_class_options() -> dict:
             """Get all the classes which extend from AbstractRunner, located in any of the runner packages"""
             rdir = os.path.join(os.path.dirname(__file__), 'runner')
@@ -568,7 +576,7 @@ class RunMe:
         else:
             # Multiple sub-classes found. Invalid situation. Abort
             print('Multiple sub-classes of BaseCLArguments found in package: {}.'
-                  'There must be only one. Exiting'.format('template.runner.'+runner_class))
+                  'There must be only one. Exiting'.format('template.runner.' + runner_class))
             raise SystemExit
         args, parser = cla().parse_arguments(args)
 
@@ -653,7 +661,8 @@ class RunMe:
         LOG_FILE = 'logs.txt'
 
         # Recover dataset name
-        dataset = os.path.basename(os.path.normpath(kwargs['input_folder'])) if kwargs['input_folder'] is not None else ""
+        dataset = os.path.basename(os.path.normpath(kwargs['input_folder'])) if kwargs[
+                                                                                    'input_folder'] is not None else ""
 
         """
         We extract the TRAIN parameters names (such as model_name, lr, ... ) from the parser directly.

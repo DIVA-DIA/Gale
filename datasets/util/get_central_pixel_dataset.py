@@ -1,10 +1,10 @@
-import os
 import argparse
+import os
 import random
-from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
 
 def get_all_files_in_folders_and_subfolders(root_dir=None):
     """Get all the files in a folder and sub-folders.
@@ -70,6 +70,7 @@ def get_gt_path(path):
     #     return os.path.join('/', *path.split('/')[:-2], 'gt', path.split('/')[-1][:-4] + '.png')
     return os.path.join('/', *path.split('/')[:-2], 'gt', path.split('/')[-1][:-4] + '.png')
 
+
 def get_crop_around_point(images, loc, half_crop):
     x = loc[1]
     y = loc[2]
@@ -77,7 +78,6 @@ def get_crop_around_point(images, loc, half_crop):
 
 
 def main(root, output, crop_size, total_size):
-
     output = output + "_" + str(crop_size)
     os.makedirs(output, exist_ok=True)
     half_crop = int(crop_size / 2)
@@ -110,7 +110,7 @@ def main(root, output, crop_size, total_size):
             locs = np.where(gts[:, half_crop:-half_crop, half_crop:-half_crop] == cls)
             locs = list(zip(locs[0], locs[1], locs[2]))
             # Randomly samples from locs
-            random_samples = random.sample(range(0, len(locs)-1), class_size)
+            random_samples = random.sample(range(0, len(locs) - 1), class_size)
             locs = [locs[i] for i in random_samples]
             # Create the target folder
             target_folder = os.path.join(output, split_folder_name, str(cls))

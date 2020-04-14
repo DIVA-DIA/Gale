@@ -22,7 +22,6 @@ model_urls = {
 
 
 class VGG(nn.Module):
-
     expected_input_size = (224, 224)
 
     def __init__(self, features, num_classes, **kwargs):
@@ -99,6 +98,8 @@ def vgg11(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg11.expected_input_size = VGG.expected_input_size
 
 
@@ -116,6 +117,8 @@ def vgg11_bn(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg11_bn.expected_input_size = VGG.expected_input_size
 
 
@@ -133,6 +136,8 @@ def vgg13(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg13.expected_input_size = VGG.expected_input_size
 
 
@@ -150,6 +155,8 @@ def vgg13_bn(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg13_bn.expected_input_size = VGG.expected_input_size
 
 
@@ -167,6 +174,8 @@ def vgg16(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg16.expected_input_size = VGG.expected_input_size
 
 
@@ -184,6 +193,8 @@ def vgg16_bn(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg16_bn.expected_input_size = VGG.expected_input_size
 
 
@@ -201,6 +212,8 @@ def vgg19(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg19.expected_input_size = VGG.expected_input_size
 
 
@@ -218,4 +231,6 @@ def vgg19_bn(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 vgg19_bn.expected_input_size = VGG.expected_input_size

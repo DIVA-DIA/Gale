@@ -7,13 +7,12 @@ import argparse
 import os
 import shutil
 import sys
-import re
-import numpy as np
-import random
 
+import numpy as np
 # Torch related stuff
 import torchvision.datasets as datasets
 from sklearn.model_selection import train_test_split
+
 from util.misc import make_folder_if_not_exists
 
 
@@ -251,6 +250,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-
     split_dataset(dataset_folder=args.dataset_folder, split=args.split, symbolic=args.symbolic)
-

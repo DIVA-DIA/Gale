@@ -1,11 +1,12 @@
 # Utils
 import time
 from abc import abstractmethod
+
 from tqdm import tqdm
 
+from util.TB_writer import TBWriter
 # DeepDIVA
 from util.metric_logger import MetricLogger, ScalarValue
-from util.TB_writer import TBWriter
 
 
 class BaseRoutine:
@@ -53,15 +54,15 @@ class BaseRoutine:
         # Iterate over whole training set
         end = time.time()
         pbar = tqdm(enumerate(data_loader), total=len(data_loader), unit='batch', ncols=130, leave=False)
-        for batch_idx, (input, target) in pbar:
+        for batch_idx, (input_batch, target) in pbar:
 
             # Measure data loading time
             data_time = time.time() - end
 
             # Moving data to GPU
-            input, target = cls.move_to_device(input=input, target=target, **kwargs)
+            input_batch, target = cls.move_to_device(input_batch=input_batch, target=target, **kwargs)
 
-            cls.run_one_mini_batch(input=input,
+            cls.run_one_mini_batch(input_batch=input_batch,
                                    target=target,
                                    multi_run_label=multi_run_label,
                                    **kwargs)
@@ -114,12 +115,12 @@ class BaseRoutine:
             return 0
 
     @classmethod
-    def move_to_device(cls, input=None, target=None, no_cuda=False, **kwargs):
+    def move_to_device(cls, input_batch=None, target=None, no_cuda=False, **kwargs):
         """Move the input and the target on the device that shall be used e.g. GPU
 
         Parameters
         ----------
-        input : torch.autograd.Variable
+        input_batch : torch.autograd.Variable
         target : torch.autograd.Variable
            The input and target data for the mini-batch
         no_cuda : boolean
@@ -131,6 +132,7 @@ class BaseRoutine:
         target : torch.autograd.Variable
            The input and target data for the mini-batch loaded on the GPU
         """
+
         def move_to(elem):
             if elem is not None:
                 if isinstance(elem, dict):
@@ -145,7 +147,7 @@ class BaseRoutine:
                         elem = elem.cuda(non_blocking=True)
             return elem
 
-        return move_to(input), move_to(target)
+        return move_to(input_batch), move_to(target)
 
     @classmethod
     def start_of_the_epoch(cls, **kwargs):
@@ -158,7 +160,7 @@ class BaseRoutine:
 
     @classmethod
     @abstractmethod
-    def run_one_mini_batch(cls, model, criterion, input, target, multi_run_label, **kwargs):
+    def run_one_mini_batch(cls, model, criterion, input_batch, target, multi_run_label, **kwargs):
         """Train the model passed as parameter for one mini-batch
 
         Parameters
@@ -167,7 +169,7 @@ class BaseRoutine:
             The network model being used.
         criterion : torch.nn.loss
             The loss function used to compute the loss of the model.
-        input : torch.autograd.Variable
+        input_batch : torch.autograd.Variable
             The input data for the mini-batch
         target : torch.autograd.Variable
             The target data (labels) for the mini-batch

@@ -15,8 +15,8 @@ model_urls = {
     'inception_v3_google': 'https://download.pytorch.org/models/inception_v3_google-1a9a5a14.pth',
 }
 
-class Inception3(nn.Module):
 
+class Inception3(nn.Module):
     expected_input_size = (299, 299)
 
     def __init__(self, num_classes, aux_logits=True, transform_input=False, **kwargs):
@@ -317,6 +317,7 @@ class BasicConv2d(nn.Module):
         x = self.bn(x)
         return F.relu(x, inplace=True)
 
+
 @Model
 def inception_v3(pretrained=False, **kwargs):
     r"""Inception v3 model architecture from
@@ -336,4 +337,6 @@ def inception_v3(pretrained=False, **kwargs):
         return model
 
     return Inception3(**kwargs)
+
+
 inception_v3.expected_input_size = Inception3.expected_input_size

@@ -2,12 +2,11 @@
 import inspect
 import logging
 import os
-from collections import OrderedDict
 # Torch related stuff
 import shutil
 from abc import abstractmethod
+from collections import OrderedDict
 from pathlib import Path
-from torch.hub import load_state_dict_from_url
 
 import numpy as np
 import pandas as pd
@@ -16,10 +15,11 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data
+from torch.hub import load_state_dict_from_url
 
 import models
-from models import model_zoo
 from datasets.util.dataset_integrity import verify_dataset_integrity
+from models import model_zoo
 
 
 # DeepDIVA
@@ -788,6 +788,7 @@ class BaseSetup:
         torch.optim.lr_scheduler.LambdaLR
             The scheduler object
         """
+
         def f(x):
             if x >= warmup_iters:
                 return 1

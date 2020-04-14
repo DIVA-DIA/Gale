@@ -5,14 +5,12 @@ Load a dataset of images by specifying the folder where its located.
 # Utils
 import os
 from multiprocessing import Pool
-import numpy as np
 
+import numpy as np
 # Torch related stuff
 import torch.utils.data as data
 import torchvision
 from torchvision.datasets.folder import pil_loader, ImageFolder
-
-from template.runner.base.base_routine import BaseRoutine
 
 
 def ImageFolderDataset(path, inmem, **kwargs):
@@ -90,13 +88,12 @@ class ImageFolderInMemory(data.Dataset):
         self.labels = np.asarray([item[1] for item in dataset.imgs])
 
         # Load all samples
-        pool = Pool(workers+1)
+        pool = Pool(workers + 1)
         self.data = pool.map(pil_loader, file_names)
         pool.close()
 
         # Set expected class attributes
         self.classes = np.unique(self.labels)
-
 
     def __getitem__(self, index):
         """
@@ -120,6 +117,3 @@ class ImageFolderInMemory(data.Dataset):
 
     def __len__(self):
         return len(self.data)
-
-
-

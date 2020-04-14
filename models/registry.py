@@ -4,6 +4,7 @@ Credit for the initial implementation of the @Model decorating system to Narayan
 
 MODEL_REGISTRY = {}
 
+
 def Model(*args, **kwargs):
     """Decorator function, makes model definition a bit more obvious than relying on python's underscore variant"""
 

@@ -1,10 +1,9 @@
 # Utils
-import numpy as np
 
-# DeepDIVA
-from .util.accuracy import accuracy_segmentation
 from util.metric_logger import MetricLogger
 from .train import SemanticSegmentationHisDBTrain
+# DeepDIVA
+from .util.accuracy import accuracy_segmentation
 
 
 class SemanticSegmentationHisDBEvaluate(SemanticSegmentationHisDBTrain):
@@ -26,15 +25,15 @@ class SemanticSegmentationHisDBEvaluate(SemanticSegmentationHisDBTrain):
         MetricLogger().add_scalar_meter(tag='loss')
 
     @classmethod
-    def run_one_mini_batch(cls, model, criterion, input, target, **kwargs):
+    def run_one_mini_batch(cls, model, criterion, input_img, target, **kwargs):
         """See parent method for documentation"""
         # Compute output
-        output = model(input)
+        output = model(input_img)
 
         # Compute and record the loss
         loss = criterion(output, target)
-        MetricLogger().update(key='loss', value=loss.item(), n=len(input))
+        MetricLogger().update(key='loss', value=loss.item(), n=len(input_img))
 
         # Compute and record the accuracy
         _, _, mean_iu, _ = accuracy_segmentation(target.data, output.data, kwargs['num_classes'])
-        MetricLogger().update(key='meanIU', value=mean_iu, n=len(input))
+        MetricLogger().update(key='meanIU', value=mean_iu, n=len(input_img))

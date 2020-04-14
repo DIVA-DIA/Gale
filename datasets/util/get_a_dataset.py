@@ -1,16 +1,18 @@
 import argparse
 import inspect
 import json
-import numpy as np
 import os
-import requests
 import shutil
 import sys
+import zipfile
+from pathlib import Path
+
+import numpy as np
+import requests
 import torch
 import torchvision
-import zipfile
 from PIL import Image
-from pathlib import Path
+
 from datasets.util.dataset_splitter import split_dataset
 from util.misc import make_folder_if_not_exists
 
@@ -221,10 +223,14 @@ def COCO(output_folder, **kwargs):
 
     # extract panoptic and stuff annotations
     annotation_path = os.path.join(root, "annotations")
-    extract_zip(zip_path=os.path.join(annotation_path, "panoptic_train2017.zip"), root=annotation_path, remove_finished=True)
-    extract_zip(zip_path=os.path.join(annotation_path, "panoptic_val2017.zip"), root=annotation_path, remove_finished=True)
-    extract_zip(zip_path=os.path.join(annotation_path, "stuff_train2017_pixelmaps.zip"), root=annotation_path, remove_finished=True)
-    extract_zip(zip_path=os.path.join(annotation_path, "stuff_val2017_pixelmaps.zip"), root=annotation_path, remove_finished=True)
+    extract_zip(zip_path=os.path.join(annotation_path, "panoptic_train2017.zip"), root=annotation_path,
+                remove_finished=True)
+    extract_zip(zip_path=os.path.join(annotation_path, "panoptic_val2017.zip"), root=annotation_path,
+                remove_finished=True)
+    extract_zip(zip_path=os.path.join(annotation_path, "stuff_train2017_pixelmaps.zip"), root=annotation_path,
+                remove_finished=True)
+    extract_zip(zip_path=os.path.join(annotation_path, "stuff_val2017_pixelmaps.zip"), root=annotation_path,
+                remove_finished=True)
 
 
 def LVIS(output_folder, **kwargs):

@@ -24,6 +24,7 @@ class Flatten(nn.Module):
         x = x.view(x.size()[0], -1)
         return x
 
+
 class AlexNet(nn.Module):
     r"""
     AlexNet model architecture from the `"One weird trick..." <https://arxiv.org/abs/1404.5997>`_ paper.
@@ -162,6 +163,7 @@ class AlexNet(nn.Module):
         # x = self.cl(x)
         # return x
 
+
 @Model
 def alexnet(pretrained=False, **kwargs):
     """
@@ -179,4 +181,6 @@ def alexnet(pretrained=False, **kwargs):
         except Exception as exp:
             logging.warning(exp)
     return model
+
+
 alexnet.expected_input_size = AlexNet.expected_input_size

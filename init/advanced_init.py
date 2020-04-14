@@ -2,11 +2,10 @@
 Here are defined the different versions of advanced initialization techniques.
 """
 import datetime
-import time
 import logging
 import math
 import sys
-from itertools import count
+import time
 
 import numpy as np
 import torch
@@ -18,7 +17,6 @@ from init.util import lda, pca
 from template.runner.base.base_routine import BaseRoutine
 from template.runner.base.base_setup import BaseSetup
 from util.TB_writer import TBWriter
-from util.metric_logger import MetricLogger
 
 
 def minibatches_to_matrix(A):
@@ -40,6 +38,7 @@ def minibatches_to_matrix(A):
     if A.shape[1] == 1:
         A = np.squeeze(A)
     return A
+
 
 def _normalize_weights(w, b):
     """
@@ -166,7 +165,7 @@ def _fit_weights_size(w, module):
         # Get default values (the existing ones) from the network
         default_values = module.weight.data.cpu().numpy()
         if type(module) is nn.Conv2d:
-            default_values = _flatten_conv_filters(default_values) # Brings it in the same shape as w
+            default_values = _flatten_conv_filters(default_values)  # Brings it in the same shape as w
         else:
             default_values = default_values.T  # Linear Layers have neurons x input_dimensions
         assert len(default_values.shape) == len(w.shape)
@@ -181,6 +180,7 @@ def _fit_weights_size(w, module):
         w = w[:, :out_size]
 
     return w
+
 
 def _flatten_conv_filters(filters):
     """
@@ -295,26 +295,26 @@ def _filter_points_trimlda(init_input, init_labels, solver, iterations=5, **kwar
     clf = LinearDiscriminantAnalysis(solver=solver)
 
     # Initialize to full list
-    input = init_input
+    inputs = init_input
     labels = init_labels
 
-    for i in range(1, iterations+1):
+    for i in range(1, iterations + 1):
         logging.info('Filter points with trim-lda')
         start_time = time.time()
-        logging.info(f'\titeration {i} of {iterations} #samples={len(input)}')
-        clf.fit(X=input, y=labels)
+        logging.info(f'\titeration {i} of {iterations} #samples={len(inputs)}')
+        clf.fit(X=inputs, y=labels)
         # Predict on the FULL LIST
         predictions = clf.predict(init_input)
         # Keep the input data where it is CORRECTLY predicted
         locs = np.where(predictions == init_labels)
-        input = init_input[locs]
+        inputs = init_input[locs]
         labels = init_labels[locs]
         logging.info(
-            f'\tAcc={(len(input)) / len(init_input):.2f} '
+            f'\tAcc={(len(inputs)) / len(init_input):.2f} '
             f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}'
         )
 
-    return input, labels
+    return inputs, labels
 
 
 def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, trim_lda, **kwargs):
@@ -422,9 +422,9 @@ def _retrain_classifier(
     classifier = classifier.cuda()
     # Measure initial accuracy
     acc = 0
-    for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
-        input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
-        output = classifier(input)
+    for i, (input_batch, target) in enumerate(zip(init_input, init_labels), 0):
+        input_batch, target = BaseRoutine.move_to_device(input_batch=input_batch, target=target, **kwargs)
+        output = classifier(input_batch)
         acc += accuracy(output.data, target.data, topk=(1,))[0]
     acc /= i
     lda_accuracy = acc.data.cpu().numpy()
@@ -446,10 +446,10 @@ def _retrain_classifier(
         #     print(f"LR is now {lr} -> Exiting!")
         #     break
         acc = 0
-        for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
-            input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
+        for i, (input_batch, target) in enumerate(zip(init_input, init_labels), 0):
+            input_batch, target = BaseRoutine.move_to_device(input_batch=input_batch, target=target, **kwargs)
             optimizer.zero_grad()
-            output = classifier(input)
+            output = classifier(input_batch)
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
@@ -630,6 +630,7 @@ def pure_lda(
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
+
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
@@ -796,6 +797,7 @@ def highlander_lda(
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
+
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
@@ -859,6 +861,7 @@ def pure_pca(
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
+
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
@@ -920,6 +923,7 @@ def pcdisc(
 
     return torch.from_numpy(W), torch.from_numpy(B)
 
+
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
@@ -976,7 +980,7 @@ def lpca(
         p, c = _adapt_magnitude(w=p, b=c, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
         # Compute available columns
-        half_available_columns = int(module.weight.shape[0]/2)
+        half_available_columns = int(module.weight.shape[0] / 2)
         if module.weight.shape[0] % 2 != 0:
             logging.info(
                 f"Not all columns will be initialized as the shape {module.weight.shape[0]} is not divisible by 2"
@@ -990,7 +994,7 @@ def lpca(
         end_index_first_part = np.min([half_available_columns, w.shape[1]])
         W[:, 0:end_index_first_part] = w[:, 0:end_index_first_part]
         # Add PCA columns in the second part
-        W[:, end_index_first_part:] = p[:, 0:W.shape[1]-end_index_first_part]
+        W[:, end_index_first_part:] = p[:, 0:W.shape[1] - end_index_first_part]
 
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
 
@@ -1185,7 +1189,7 @@ def relda(
         clf = LinearDiscriminantAnalysis(solver=kwargs['solver'])
         initial_size = len(init_input)
         for i in range(N):
-            logging.info(f'Iteration {i+1} of {N} #samples={len(init_input)}')
+            logging.info(f'Iteration {i + 1} of {N} #samples={len(init_input)}')
             if len(init_input) < 1:
                 logging.info('No more wrong samples -> exiting loop')
                 break
@@ -1203,7 +1207,7 @@ def relda(
             logging.info(f'\tpredicting...')
             predictions = clf.predict(init_input)
             locs = np.where(predictions != init_labels)
-            logging.info(f'\tcurrent acc={1 - float(len(locs[0]))/len(init_input):.2f} ...')
+            logging.info(f'\tcurrent acc={1 - float(len(locs[0])) / len(init_input):.2f} ...')
             init_input = init_input[locs]
             init_labels = init_labels[locs]
             logging.info(f'\tglobal integrated acc={(initial_size - len(init_input)) / initial_size:.2f} ...')
@@ -1232,6 +1236,7 @@ def relda(
         W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
+
 
 #######################################################################################################################
 #######################################################################################################################
@@ -1388,4 +1393,3 @@ def greedya(
         W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
 
     return torch.from_numpy(W), torch.from_numpy(B)
-

@@ -2,13 +2,10 @@
 Principal Component Analysis Algorithm
 """
 
-import logging
-import numpy as np
 from sklearn.decomposition import PCA
 
 
 def transform(X):
-
     # # Check for sizes
     # assert len(X.shape) == 2
     #

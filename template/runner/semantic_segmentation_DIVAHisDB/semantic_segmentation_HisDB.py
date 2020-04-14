@@ -1,7 +1,6 @@
 # Utils
 
 # Delegated
-from . import evaluate, train
 from .evaluate import SemanticSegmentationHisDBEvaluate
 from .setup import SemanticSegmentationSetupHisDB
 from .train import SemanticSegmentationHisDBTrain

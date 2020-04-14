@@ -8,7 +8,6 @@ __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
            'wide_resnet50_2', 'wide_resnet101_2']
 
-
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
     'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
@@ -119,7 +118,6 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-
     expected_input_size = (224, 224)
 
     def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
@@ -239,6 +237,8 @@ def resnet18(pretrained=False, progress=True, **kwargs):
     """
     return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress,
                    **kwargs)
+
+
 resnet18.expected_input_size = ResNet.expected_input_size
 
 
@@ -253,6 +253,8 @@ def resnet34(pretrained=False, progress=True, **kwargs):
     """
     return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], pretrained, progress,
                    **kwargs)
+
+
 resnet34.expected_input_size = ResNet.expected_input_size
 
 
@@ -267,6 +269,8 @@ def resnet50(pretrained=False, progress=True, **kwargs):
     """
     return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
                    **kwargs)
+
+
 resnet50.expected_input_size = ResNet.expected_input_size
 
 
@@ -281,6 +285,8 @@ def resnet101(pretrained=False, progress=True, **kwargs):
     """
     return _resnet('resnet101', Bottleneck, [3, 4, 23, 3], pretrained, progress,
                    **kwargs)
+
+
 resnet101.expected_input_size = ResNet.expected_input_size
 
 
@@ -295,6 +301,8 @@ def resnet152(pretrained=False, progress=True, **kwargs):
     """
     return _resnet('resnet152', Bottleneck, [3, 8, 36, 3], pretrained, progress,
                    **kwargs)
+
+
 resnet152.expected_input_size = ResNet.expected_input_size
 
 
@@ -311,6 +319,8 @@ def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
     kwargs['width_per_group'] = 4
     return _resnet('resnext50_32x4d', Bottleneck, [3, 4, 6, 3],
                    pretrained, progress, **kwargs)
+
+
 resnext50_32x4d.expected_input_size = ResNet.expected_input_size
 
 
@@ -327,6 +337,8 @@ def resnext101_32x8d(pretrained=False, progress=True, **kwargs):
     kwargs['width_per_group'] = 8
     return _resnet('resnext101_32x8d', Bottleneck, [3, 4, 23, 3],
                    pretrained, progress, **kwargs)
+
+
 resnext101_32x8d.expected_input_size = ResNet.expected_input_size
 
 
@@ -347,6 +359,8 @@ def wide_resnet50_2(pretrained=False, progress=True, **kwargs):
     kwargs['width_per_group'] = 64 * 2
     return _resnet('wide_resnet50_2', Bottleneck, [3, 4, 6, 3],
                    pretrained, progress, **kwargs)
+
+
 wide_resnet50_2.expected_input_size = ResNet.expected_input_size
 
 
@@ -367,4 +381,6 @@ def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
     kwargs['width_per_group'] = 64 * 2
     return _resnet('wide_resnet101_2', Bottleneck, [3, 4, 23, 3],
                    pretrained, progress, **kwargs)
+
+
 wide_resnet101_2.expected_input_size = ResNet.expected_input_size

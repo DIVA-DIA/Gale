@@ -7,11 +7,11 @@ General purpose utility functions.
 import os
 import os.path
 import string
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image
+
 try:
     import accimage
 except ImportError:
@@ -93,10 +93,10 @@ def convert_to_rgb(pic):
     elif pic.mode in ("CMYK", "RGBA", "P"):
         pic = pic.convert('RGB')
     elif pic.mode == "I":
-        img = (np.divide(np.array(pic, np.int32), 2**16-1)*255).astype(np.uint8)
+        img = (np.divide(np.array(pic, np.int32), 2 ** 16 - 1) * 255).astype(np.uint8)
         pic = Image.fromarray(np.stack((img, img, img), axis=2))
     elif pic.mode == "I;16":
-        img = (np.divide(np.array(pic, np.int16), 2**8-1)*255).astype(np.uint8)
+        img = (np.divide(np.array(pic, np.int16), 2 ** 8 - 1) * 255).astype(np.uint8)
         pic = Image.fromarray(np.stack((img, img, img), axis=2))
     elif pic.mode == "L":
         img = np.array(pic).astype(np.uint8)
@@ -168,5 +168,5 @@ def get_colors(n, name='hsv'):
     It return n distintc RGB colors using a mapping function that maps each index in 0, 1, ..., n-1 to a distinct
     RGB color; the keyword argument name must be a standard mpl colormap name.'''
     colors = list(map(plt.cm.get_cmap(name, n), range(n)))
-    colors = list(map(lambda c: (np.array(c[:3])*255).astype(np.uint8), colors))
+    colors = list(map(lambda c: (np.array(c[:3]) * 255).astype(np.uint8), colors))
     return colors

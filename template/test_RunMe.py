@@ -12,14 +12,15 @@ the main functions can be tested.
 Please keep the list of these tests up to date as soon as you add new features.
 """
 import os
+
 import numpy as np
 import pytest
 
 from template.RunMe import RunMe
 
+INPUT_PATH = "/local/scratch/dataset"
+OUTPUT_PATH = "/local/scratch/albertim/output"
 
-INPUT_PATH="/local/scratch/dataset"
-OUTPUT_PATH="/local/scratch/albertim/output"
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
@@ -31,6 +32,7 @@ def run_around_tests():
     # Code that will run after your test, for example:
     print("Done!")
 
+
 def test_one():
     """
     - Verify the sizes of the return of execute
@@ -40,7 +42,7 @@ def test_one():
     args = ["-rc", "ImageClassification",
             "--experiment-name", "test_image_classification",
             "--ignoregit",
-            "--input-folder", os.path.join(INPUT_PATH,"CIFAR10"),
+            "--input-folder", os.path.join(INPUT_PATH, "CIFAR10"),
             "--output-folder", OUTPUT_PATH,
             "--model-name", "CNN_basic",
             "--seed", "42",
@@ -55,7 +57,7 @@ def test_one():
 
     assert len(val.shape) == 2
     assert train.shape[0] == 1
-    assert train.shape[1] == epochs+1
+    assert train.shape[1] == epochs + 1
 
     assert len(train.shape) == 1
     assert train.shape[0] == 1

@@ -14,10 +14,10 @@ import os
 import torch
 from PIL import Image
 
+import util.transforms as T
 from template.runner.base import AbstractRunner
 from template.runner.base.base_routine import BaseRoutine
 from template.runner.base.base_setup import BaseSetup
-import util.transforms as T
 from util.misc import pil_loader, convert_to_rgb
 
 
@@ -87,6 +87,7 @@ class BaseInference(AbstractRunner):
     These methods delegate their function to other classes in this package.
     It is useful because sub-classes can selectively change the logic of certain parts only.
     """
+
     def _load_checkpoint(self, load_model, **kwargs):
         """Load a torch checkpoint a return it
 
@@ -128,7 +129,7 @@ class BaseInference(AbstractRunner):
         # Transform it
         img = self.transform(img)
         # Move it to the correct device
-        img, _ = BaseRoutine.move_to_device(input=img, **kwargs)
+        img, _ = BaseRoutine.move_to_device(input_batch=img, **kwargs)
         # Fake a mini-batch of size 1
         img = img.unsqueeze(0)
         return img
@@ -149,5 +150,3 @@ class BaseInference(AbstractRunner):
         payload = {'result': result}
         logging.info(f"Returning payload: {payload}")
         return payload
-
-

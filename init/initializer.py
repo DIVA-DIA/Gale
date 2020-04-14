@@ -4,14 +4,13 @@ For initializing complex architecture or using more articulated stuff (e.g LDA
 has two functions) one should implement his own init function.
 """
 
+import gc
 # Utils
 import logging
 import sys
 import time
 from itertools import count
-from threading import Thread
 
-import gc
 import numpy as np
 import psutil
 from sklearn.feature_extraction.image import extract_patches_2d
@@ -37,7 +36,7 @@ def init_model(model, data_loader, init_function, **kwargs):
         Name of the function to use to init the model
     """
     if 'random' in init_function:
-       return
+        return
 
     # Collect initial data
     X, y = _collect_initial_data(data_loader=data_loader, **kwargs)
@@ -151,17 +150,17 @@ def _collect_initial_data(data_loader, num_samples, **kwargs):
     # If not specified take the entire dataset
     if num_samples is None:
         num_samples = len(data_loader.dataset)
-        
+
     X = []
     y = []
     # This is necessary because last batches might not have size mini-batch but smaller!
     collected_so_far = 0
     # Iterate troughs the dataset as many times as necessary to collect the amount samples required
     for j in count(1):
-        for i, (input, target) in enumerate(data_loader, start=1):
-            X.append(input)
+        for i, (input_samples, target) in enumerate(data_loader, start=1):
+            X.append(input_samples)
             y.append(target['category_id'])
-            collected_so_far += len(input)
+            collected_so_far += len(input_samples)
             # If you collected enough samples leave. This makes a precision of +-data_loader.batch_size. See documentation
             if collected_so_far >= num_samples:
                 return X, y

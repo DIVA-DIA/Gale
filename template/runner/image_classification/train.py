@@ -21,7 +21,7 @@ class ImageClassificationTrain(BaseRoutine):
         MetricLogger().add_scalar_meter(tag='loss')
 
     @classmethod
-    def run_one_mini_batch(cls, model, criterion, optimizer, input, target, **kwargs):
+    def run_one_mini_batch(cls, model, criterion, optimizer, input_batch, target, **kwargs):
         """See parent method for documentation
 
         Extra-Parameters
@@ -30,18 +30,18 @@ class ImageClassificationTrain(BaseRoutine):
             The optimizer used to perform the weight update.
         """
         # Compute output
-        output = model(input)
+        output = model(input_batch)
 
         # Unpack the target
         target = target['category_id']
 
         # Compute and record the loss
         loss = criterion(output, target)
-        MetricLogger().update(key='loss', value=loss.item(), n=len(input))
+        MetricLogger().update(key='loss', value=loss.item(), n=len(input_batch))
 
         # Compute and record the accuracy
         acc = accuracy(output.data, target.data, topk=(1,))[0]
-        MetricLogger().update(key='accuracy', value=acc[0], n=len(input))
+        MetricLogger().update(key='accuracy', value=acc[0], n=len(input_batch))
 
         # Reset gradient
         optimizer.zero_grad()

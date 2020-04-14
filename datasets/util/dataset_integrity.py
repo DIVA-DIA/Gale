@@ -17,8 +17,8 @@ import json
 import logging
 import os
 import sys
-from stat import S_ISDIR, S_ISREG
 import time
+from stat import S_ISDIR, S_ISREG
 
 
 def generate_integrity_footprint(dataset_folder):
@@ -160,6 +160,7 @@ def _process_file(path):
     data['file_hash'] = hasher.hexdigest()
     return data
 
+
 def verify_dataset_integrity(input_folder, disable_dataset_integrity, enable_deep_dataset_integrity, **kwargs):
     """
     Verifies dataset integrity by looking at the footprint.json in the dataset folder.
@@ -288,7 +289,7 @@ def dict_compare(d1, d2):
     intersect_keys = d1_keys.intersection(d2_keys)
     added = d1_keys - d2_keys
     removed = d2_keys - d1_keys
-    modified = {o : (d1[o], d2[o]) for o in intersect_keys if d1[o] != d2[o]}
+    modified = {o: (d1[o], d2[o]) for o in intersect_keys if d1[o] != d2[o]}
     same = set(o for o in intersect_keys if d1[o] == d2[o])
     return added, removed, modified, same
 
