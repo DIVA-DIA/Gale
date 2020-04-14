@@ -541,7 +541,7 @@ class BaseSetup:
         raise NotImplementedError
 
     @classmethod
-    def _dataloaders_from_datasets(cls, batch_size, train_ds, val_ds, test_ds, workers, **kwargs):
+    def _dataloaders_from_datasets(cls, batch_size, train_ds, val_ds, test_ds, workers, no_pin_memory, **kwargs):
         """
         This function creates (and returns) dataloader from datasets objects
 
@@ -555,6 +555,8 @@ class BaseSetup:
             Train, validation and test splits
         workers:
             Number of workers to use to load the data.
+        no_pin_memory: bool
+            Pin the data to GPU
 
         Returns
         -------
@@ -568,13 +570,16 @@ class BaseSetup:
         train_loader = torch.utils.data.DataLoader(train_ds,
                                                    shuffle=True,
                                                    batch_size=batch_size,
-                                                   num_workers=workers)
+                                                   num_workers=workers,
+                                                   pin_memory=not no_pin_memory)
         val_loader = torch.utils.data.DataLoader(val_ds,
                                                  batch_size=batch_size,
-                                                 num_workers=workers)
+                                                 num_workers=workers,
+                                                 pin_memory=not no_pin_memory)
         test_loader = torch.utils.data.DataLoader(test_ds,
                                                   batch_size=batch_size,
-                                                  num_workers=workers)
+                                                  num_workers=workers,
+                                                  pin_memory=not no_pin_memory)
         return train_loader, val_loader, test_loader
 
     ################################################################################################

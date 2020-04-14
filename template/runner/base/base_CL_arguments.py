@@ -165,6 +165,10 @@ class BaseCLArguments:
                                    action='store_true',
                                    default=False,
                                    help='run on CPU')
+        parser_system.add_argument('--no-pin-memory',
+                                   action='store_true',
+                                   default=False,
+                                   help='disable the pin memory on GPU')
         parser_system.add_argument('--device',
                                    default='cuda',
                                    help='selects device')
