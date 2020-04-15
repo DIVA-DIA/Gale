@@ -17,10 +17,10 @@ class CLArguments(BaseCLArguments):
         """
         semantic_segmentation = self.parser.add_argument_group('Semantic', 'Semantic Segmentation')
 
-        semantic_segmentation.add_argument('--input-patch-size',
-                                           type=int,
-                                           default=128, metavar='N',
-                                           help='size of the square input patch e.g. with 32 the input will be re-sized to 32x32')
+        # semantic_segmentation.add_argument('--input-patch-size',
+        #                                    type=int,
+        #                                    default=128, metavar='N',
+        #                                    help='size of the square input patch e.g. with 32 the input will be re-sized to 32x32')
 
         # parameters for HisDB
         semantic_segmentation.add_argument('--imgs-in-memory',

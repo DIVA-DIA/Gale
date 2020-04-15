@@ -62,6 +62,7 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
     @classmethod
     def set_up_transforms(cls, train_ds, val_ds, test_ds, **kwargs):
         super().set_up_transforms(train_ds, val_ds, test_ds, **kwargs)
+        # TODO refactor the twin crop into the system with TwinCompose()
         for ds in [train_ds, val_ds, test_ds]:
             if ds is not None:
                 ds.twin_transform = cls.get_test_transform(**kwargs)
