@@ -1,3 +1,4 @@
+import itertools
 import multiprocessing as mp
 import os
 import sys
@@ -6,35 +7,39 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 
 import numpy as np
-import torch
 from sigopt import Connection
 
 from template.RunMe import RunMe
 
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_final_config_standard.json"
 SIGOPT_PROJECT = "mahpd"
-SIGOPT_PARALLEL_BANDWIDTH = 10
+SIGOPT_PARALLEL_BANDWIDTH = 1
 
 # Init System Parameters #################################################
-# NUM_GPUs = range(torch.cuda.device_count())
-# NUM_GPUs = [3, 4, 5, 6, 7, 8]
-NUM_GPUs = [1, 2, 3, 4, 5, 6, 7]
-# CPU_CORES = mp.cpu_count()
-CPU_CORES = 30
+MAX_PARALLEL_EXPERIMENTS = 4
+
+# GPUs_LIST = range(torch.cuda.device_count())
+# GPUs_LIST = [3, 4, 5, 6, 7, 8]
+GPUs_LIST = [4,5,6,7]
+MAX_PROCESSES_PER_GPU = 2
+
+# CPUs_LIST = range(mp.cpu_count())
+CPUs_LIST = range(30, 62)
+
 SERVER = 'lucy'
 SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "retrain"
+EXPERIMENT_NAME_PREFIX = "raie"
 EPOCHS = 50 # For CB55 is /5
-SIGOPT_RUNS = 500 # 10 * num of parameters to optimize + 10 buffer + 10 top performing
+SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = 3
 # RUNS_PER_VARIANCE = 5
-PROCESSES_PER_GPU = 8
+
 
 
 ##########################################################################
@@ -44,7 +49,8 @@ MODELS = [
     # "InitBaseline",
     # "InitBaselineVGGLike",
     # "LDApaper",
-    "babyresnet18",
+    # "babyresnet18",
+    "raieresnet18",
 ]
 
 DATASETS = [
@@ -61,17 +67,16 @@ DATASETS = [
 
 # (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
-    ("random",          None, "", None),
-    ("randisco",        None, "",                                 "sweep/configs/sigopt_final_config_randisco"),
-    ("randisco",        None, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_sbgatto.json"),
+    ("random",          189837, "", None),
+    ("randisco",        189838, "--trim-lda False --retrain True ", None),
     # ("pure_lda",        None, "", None),
     # ("pure_pca",        None, "", None),
-    # ("pcdisc",          None, "", None),
+    ("pcdisc",          189839, "--trim-lda False --retrain True ", None),
     # ("lpca",            None, "", None),
 
     # ("mirror_lda",      None, "", None),
     # ("highlander_lda",  None, "", None),
-    # ("greedya",         None, "", None),
+    # ("greedya",         None, "--trim-lda False --retrain True ", None),
     # ("reverse_pca",     None, "", None),
     # ("relda",           None, "", None),
 ]
@@ -93,8 +98,8 @@ class ExperimentsBuilder(object):
             sigopt_token,
             sigopt_file,
             sigopt_project,
-            sigopt_runs,
             sigopt_parallel_bandwidth,
+            sigopt_runs=None,
     ):
         """Create a set of experiments to be run in parallel given the configurations
 
@@ -119,12 +124,12 @@ class ExperimentsBuilder(object):
             SigOpt API token
         sigopt_file : str
             Path to a JSON file containing sig_opt variables and sig_opt bounds.
-        sigopt_runs : int
-            Number of updates of SigOpt required
         sigopt_project : str
             SigOpt project name
         sigopt_parallel_bandwidth : int
             Number of concurrent parallel optimization running
+        sigopt_runs : int or None
+            Number of updates of SigOpt required
 
         Returns
         -------
@@ -136,9 +141,6 @@ class ExperimentsBuilder(object):
             for model in models:
                 for (init, experiment_id, extra, sigopt_custom_file) in runs:
                     experiment_name = experiment_name_prefix + '_' + init + '_' + Path(dataset).stem
-
-                    if extra is not "":
-                        experiment_name = experiment_name_prefix + '_' + init + '_retrain_' + Path(dataset).stem
 
                     # Create an experiment and gets its ID if necessary
                     if experiment_id is None:
@@ -172,17 +174,19 @@ class ExperimentsBuilder(object):
                     )
 
                     # Create as many parallel one as required
-                    for _ in range(sigopt_parallel_bandwidth):
-                        experiments.append(Experiment(
-                            experiment_name=experiment_name,
-                            model_name=model,
-                            output_folder=output_folder,
-                            input_folder=dataset,
-                            epochs=epochs, #int(epochs/5) if "CB55" in dataset else epochs,
-                            init=init,
-                            additional=additional
-                        ))
-        return experiments
+                    if sigopt_runs is None:
+                        sigopt_runs = experiment.observation_budget - experiment.progress.observation_count
+                    experiments.append([Experiment(
+                        experiment_name=experiment_name,
+                        model_name=model,
+                        output_folder=output_folder,
+                        input_folder=dataset,
+                        epochs=epochs, #int(epochs/5) if "CB55" in dataset else epochs,
+                        init=init,
+                        additional=additional
+                    ) for _ in range(sigopt_parallel_bandwidth + sigopt_runs)])
+        # Flatten the list of lists of experiments s.t [a,a,a,b,b,b,c,c,c] -> [a,b,c,a,b,c,a,b,c]
+        return [y for x in itertools.zip_longest(*experiments) for y in x if y is not None]
 
     # @staticmethod
     # def build_variance_combinations():
@@ -310,25 +314,20 @@ class ExperimentProcess(Process):
     @staticmethod
     def num_workers() -> int:
         # 'max_' here is meant as "running at the same time"
-        max_allowed = len(NUM_GPUs) * PROCESSES_PER_GPU
+        max_allowed = np.min([len(GPUs_LIST) * MAX_PROCESSES_PER_GPU, MAX_PARALLEL_EXPERIMENTS])
         max_needed = len(DATASETS) * len(MODELS) * len(RUNS) * SIGOPT_PARALLEL_BANDWIDTH
-        return int(np.floor(CPU_CORES / np.min([max_allowed, max_needed])))
+        return int(np.floor(len(CPUs_LIST) / np.min([max_allowed, max_needed])))
 
     @staticmethod
     def list_cpus(index) -> str:
         workers = ExperimentProcess.num_workers()
-        start_index = 30 + index * workers
-        # if start_index + workers > CPU_CORES:
-        #     raise EnvironmentError(
-        #         f"Attempt to allocate more cores ({start_index + workers}) than available ({CPU_CORES})."
-        #     )
-        return ",".join([str(x) for x in list(range(start_index, start_index + workers))])
+        start_index = index * workers
+        return ",".join([str(x) for x in CPUs_LIST[start_index : start_index + workers]])
 
 
 ##########################################################################
 def run_experiments(gpu_indexes, processes_per_gpu, queue):
     processes = []
-    max_processes = queue.qsize()
     i = 0
     for _ in range(processes_per_gpu):
         for gpu_index in gpu_indexes:
@@ -336,12 +335,11 @@ def run_experiments(gpu_indexes, processes_per_gpu, queue):
             process = ExperimentProcess(queue=queue, gpu_index=gpu_index, cpu_list=cpu_list)
             process.start()
             processes.append(process)
-            time.sleep(60)
+            # time.sleep(15)
             i += 1
-            if i == max_processes:
-                # This happens if queue.qsize() < #num process that can be allocated in total
+            if i == MAX_PARALLEL_EXPERIMENTS:
                 break
-        if i == max_processes:
+        if i == MAX_PARALLEL_EXPERIMENTS:
             break
 
     for p in processes:
@@ -366,11 +364,11 @@ if __name__ == '__main__':
         sigopt_token=SIGOPT_TOKEN,
         sigopt_file=SIGOPT_FILE,
         sigopt_project=SIGOPT_PROJECT,
-        sigopt_runs=SIGOPT_RUNS,
         sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
+        sigopt_runs=SIGOPT_RUNS,
     ))
     [queue.put(e) for e in experiments]
-    run_experiments(NUM_GPUs, PROCESSES_PER_GPU, queue)
+    run_experiments(GPUs_LIST, MAX_PROCESSES_PER_GPU, queue)
 
     # print("variance...")
     # experiments = []

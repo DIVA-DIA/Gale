@@ -21,35 +21,42 @@ class CLArguments(BaseCLArguments):
 
         # Inject wisdom for default parameters based on the init function
         init_function = args.init_function
-        if init_function == "randisco":    # x x x 1 1 0
-            args.lin_normalize = 1
-            args.lin_standardize = 1
+        if init_function == "randisco":    # x x x - 0 0 0 - 0 1 0  (lin 110 if no retrain)
+            args.retrain_standardize = 1
 
-        if init_function is "pure_lda":    # 0 1 1 1 0 0
+        if init_function is "pure_lda":    # 0 1 1 - 1 0 0
             args.conv_standardize = 1
             args.conv_scale = 1
             args.lin_normalize = 1
+            args.retrain_standardize = 1
 
-        if init_function == "pure_pca":    # 1 1 1 x x x
+        if init_function == "pure_pca":    # 1 1 1 - x x x
             args.conv_normalize = 1
             args.conv_standardize = 1
             args.conv_scale = 1
+            args.retrain_standardize = 1
 
-        if init_function == "pcdisc":      # 1 1 1 1 1 1
+        if init_function == "pcdisc":      # 1 1 1 - 1 1 1
             args.conv_normalize = 1
             args.conv_standardize = 1
             args.conv_scale = 1
             args.lin_normalize = 1
             args.lin_standardize = 1
             args.lin_scale = 1
+            args.retrain_standardize = 1
 
-        if init_function == "lpca":        # 0 0 1 1 0 0
+        if init_function == "lpca":        # 0 0 1 - 1 0 0
             args.conv_scale = 1
             args.lin_normalize = 1
 
-        if init_function == "sbgatto":
+        if init_function == "greedya":      # 1 1 1 - 1 1 1
+            args.conv_normalize = 1
             args.conv_standardize = 1
             args.conv_scale = 1
+            args.lin_normalize = 1
+            args.lin_standardize = 1
+            args.lin_scale = 1
+            args.retrain_standardize = 1
 
         return args, self.parser
 
@@ -175,11 +182,11 @@ class CLArguments(BaseCLArguments):
                                  help="Flag for retraining the classifier")
         parser_init.add_argument('--retrain-wd',
                                  type=float,
-                                 default=0.003,
+                                 default=0.001,
                                  help="Weight decay for the last layer")
         parser_init.add_argument('--retrain-lr',
                                  type=float,
-                                 default=0.015,
+                                 default=0.01,
                                  help="Learning rate for the last layer")
         parser_init.add_argument('--retrain-epochs',
                                  type=int,

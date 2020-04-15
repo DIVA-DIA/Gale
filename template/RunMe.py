@@ -157,63 +157,66 @@ class RunMe:
             )
         # Authenticate to SigOpt
         conn = Connection(client_token=sigopt_token)
+
         # Running as many runs as necessary, stopping early is max budget is reached
-        for _ in count(1):
-            # Refresh experiment object
-            experiment = conn.experiments(sigopt_experiment_id).fetch()
+        # TODO this is voluntarily disabled to use with run_parallel.py which takes care of this
+        # for _ in count(1):
 
-            # It case the bandwidth is 1, currently open suggestions are dead runs so we remove them
-            if experiment.parallel_bandwidth == 1:
-                conn.experiments(experiment.id).suggestions().delete(state="open")
+        # Refresh experiment object
+        experiment = conn.experiments(sigopt_experiment_id).fetch()
 
-            # Check if budget has been met
-            if experiment.progress.observation_budget_consumed >= experiment.observation_budget:
-                print(
-                    f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
-                    f"{experiment.observation_budget}. Finished here :)"
-                )
-                return {}
+        # It case the bandwidth is 1, currently open suggestions are dead runs so we remove them
+        if experiment.parallel_bandwidth == 1:
+            conn.experiments(experiment.id).suggestions().delete(state="open")
 
-            # Get suggestion from SigOpt
-            suggestion = conn.experiments(experiment.id).suggestions().create()
-            params = suggestion.assignments
+        # Check if budget has been met
+        if experiment.progress.observation_count >= experiment.observation_budget:
+            print(
+                f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
+                f"{experiment.observation_budget}. Finished here :)"
+            )
+            return {}
 
-            # Override/inject CL arguments received from SigOpt
-            for key in params:
-                if key in kwargs and isinstance(kwargs[key], bool):
-                    params[key] = params[key].lower() in ['true']
-                kwargs[key.replace("-", "_")] = params[key]
+        # Get suggestion from SigOpt
+        suggestion = conn.experiments(experiment.id).suggestions().create()
+        params = suggestion.assignments
 
-            # Run
-            return_value = cls._execute(multi_run=multi_run, **kwargs)
-            val = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
+        # Override/inject CL arguments received from SigOpt
+        for key in params:
+            if key in kwargs and isinstance(kwargs[key], bool):
+                params[key] = params[key].lower() in ['true']
+            kwargs[key.replace("-", "_")] = params[key]
 
-            # Get indexes of highest values
-            indexes = np.argmax(val, axis=1)
-            # Select the highest values
-            scores = val[np.arange(val.shape[0]), indexes]
+        # Run
+        return_value = cls._execute(multi_run=multi_run, **kwargs)
+        val = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
 
-            # Compute the averaged value and std of the runs (if multi_run is None then is a single value)
-            values = [{
-                "name": "validation_accuracy",
-                "value": float(np.mean(scores)),
-                "value_stddev": float(np.std(scores)) if multi_run is not None else None
-            }]
+        # Get indexes of highest values
+        indexes = np.argmax(val, axis=1)
+        # Select the highest values
+        scores = val[np.arange(val.shape[0]), indexes]
 
-            # If enabled, get the best epoch value
-            if sigopt_best_epoch:
-                # Correct for epoch -1 being at the end of the array if necessary
-                indexes[indexes == val.shape[1]] = -1
-                values.append({
-                    "name": "best_epoch",
-                    "value": float(np.round(np.mean(indexes))),
-                    "value_stddev": float(np.std(indexes))
-                })
-                TBWriter().add_scalar(tag='test/best_epoch', scalar_value=float(np.round(np.mean(indexes))))
-                TBWriter().add_scalar(tag='test/best_epoch_std', scalar_value=float(np.std(indexes)))
+        # Compute the averaged value and std of the runs (if multi_run is None then is a single value)
+        values = [{
+            "name": "validation_accuracy",
+            "value": float(np.mean(scores)),
+            "value_stddev": float(np.std(scores)) if multi_run is not None else None
+        }]
 
-            # Report the observation
-            conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, values=values)
+        # If enabled, get the best epoch value
+        if sigopt_best_epoch:
+            # Correct for epoch -1 being at the end of the array if necessary
+            indexes[indexes == val.shape[1]] = -1
+            values.append({
+                "name": "best_epoch",
+                "value": float(np.round(np.mean(indexes))),
+                "value_stddev": float(np.std(indexes))
+            })
+            TBWriter().add_scalar(tag='test/best_epoch', scalar_value=float(np.round(np.mean(indexes))))
+            TBWriter().add_scalar(tag='test/best_epoch_std', scalar_value=float(np.std(indexes)))
+
+        # Report the observation
+        conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, values=values)
         return {}
 
     @classmethod
