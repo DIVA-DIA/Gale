@@ -166,8 +166,9 @@ class RunMe:
         experiment = conn.experiments(sigopt_experiment_id).fetch()
 
         # It case the bandwidth is 1, currently open suggestions are dead runs so we remove them
-        if experiment.parallel_bandwidth == 1:
-            conn.experiments(experiment.id).suggestions().delete(state="open")
+        # TODO this is voluntarily disabled to use with run_parallel.py which takes care of this
+        # if experiment.parallel_bandwidth == 1:
+        #     conn.experiments(experiment.id).suggestions().delete(state="open")
 
         # Check if budget has been met
         if experiment.progress.observation_count >= experiment.observation_budget:
