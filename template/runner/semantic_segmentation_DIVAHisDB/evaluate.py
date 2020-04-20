@@ -1,8 +1,8 @@
-# Utils
+import numpy as np
 
+# Gale
 from util.metric_logger import MetricLogger
 from .train import SemanticSegmentationHisDBTrain
-# DeepDIVA
 from .util.accuracy import accuracy_segmentation
 
 
@@ -35,5 +35,10 @@ class SemanticSegmentationHisDBEvaluate(SemanticSegmentationHisDBTrain):
         MetricLogger().update(key='loss', value=loss.item(), n=len(input_batch))
 
         # Compute and record the accuracy
-        _, _, mean_iu, _ = accuracy_segmentation(target.data, output.data, kwargs['num_classes'])
+        _, _, mean_iu, _ = accuracy_segmentation(target.cpu().numpy(), get_argmax(output), kwargs['num_classes'])
         MetricLogger().update(key='meanIU', value=mean_iu, n=len(input_batch))
+
+
+def get_argmax(output):
+    """ Gets the argmax values for each sample in the minibatch"""
+    return np.array([np.argmax(o, axis=0) for o in output.data.cpu().numpy()])

@@ -65,7 +65,7 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
         # TODO refactor the twin crop into the system with TwinCompose()
         for ds in [train_ds, val_ds, test_ds]:
             if ds is not None:
-                ds.twin_transform = cls.get_test_transform(**kwargs)
+                ds.twin_transform = cls.get_twin_transformations(**kwargs)
 
     @classmethod
     def get_train_transform(cls, crop_size, **kwargs):
@@ -87,7 +87,7 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
         trains_ds, _, _ = cls._get_datasets(**kwargs)
         return OnlyTarget(transforms.Compose([
             # transforms the gt image into a one-hot encoded matrix
-            custom_transforms.OneHotEncodingDIVAHisDB(class_encodings=trains_ds.class_encodings),
+            custom_transforms.OneHotEncodingDIVAHisDB(class_encodings=trains_ds.classes),
             # transforms the one hot encoding to argmax labels -> for the cross-entropy criterion
             custom_transforms.OneHotToPixelLabelling()]))
 
@@ -151,12 +151,12 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
         # set class encodings
         class_encodings = cls.load_class_encodings_from_file(**kwargs)
         for ds in [train_ds, val_ds, test_ds]:
-            ds.class_encodings = class_encodings
+            ds.classes = class_encodings
             ds.num_classes = len(class_encodings)
 
         # Setup transforms
         logging.info('Setting up transforms')
-        cls.set_up_transforms(train_ds=train_ds, val_ds=val_ds, test_ds=test_ds, class_encodings=class_encodings,
+        cls.set_up_transforms(train_ds=train_ds, val_ds=val_ds, test_ds=test_ds, classes=class_encodings,
                               **kwargs)
 
         # Get the dataloaders
@@ -229,7 +229,7 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
         # Extracts the class encodings
         for row in csv_file.values:
             if 'class_encodings' in str(row[0]).lower():
-                class_encodings = np.array([x for x in row[1:] if str(x) != 'nan'], dtype=float)
+                class_encodings = np.array([x for x in row[1:] if str(x) != 'nan'], dtype=int)
         if 'class_encodings' not in locals():
             logging.error("Class weights not found in analytics.csv")
             raise EOFError

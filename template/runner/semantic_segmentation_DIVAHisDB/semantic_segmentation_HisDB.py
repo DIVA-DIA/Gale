@@ -21,7 +21,7 @@ class SemanticSegmentationHisDB(BaseRunner):
         """
         # Setting up the dataloaders
         train_loader, val_loader, test_loader = self.setup.set_up_dataloaders(**kwargs)
-        self.class_encoding = train_loader.dataset.class_encodings
+        self.class_encoding = train_loader.dataset.classes
         self.img_names_sizes_dict = dict(test_loader.dataset.img_names_sizes)  # (gt_img_name, img_size (H, W))
         num_classes = len(self.class_encoding)
 

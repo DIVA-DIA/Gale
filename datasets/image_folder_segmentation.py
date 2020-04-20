@@ -74,14 +74,14 @@ class ImageFolderSegmentationDataset(data.Dataset):
 
     def __init__(self, path, workers, imgs_in_memory, crops_per_image, crop_size,
                  transform=None, target_transform=None, twin_transform=None,
-                 loader=default_loader, class_encodings=None, **kwargs):
+                 loader=default_loader, classes=None, **kwargs):
         """
         #TODO doc
         Parameters
         ----------
         path : string
             Path to dataset folder (train / val / test)
-        class_encodings :
+        classes :
         workers : int
         imgs_in_memory :
         crops_per_image : int
@@ -95,7 +95,7 @@ class ImageFolderSegmentationDataset(data.Dataset):
 
         # Init list
         self.root = path
-        self.class_encodings = class_encodings
+        self.classes = classes
         self.num_workers = workers
         self.imgs_in_memory = imgs_in_memory
         self.crops_per_image = crops_per_image
