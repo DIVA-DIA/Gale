@@ -68,10 +68,10 @@ DATASETS = [
 # (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
     ("random",          189837, "", None),
-    ("randisco",        189838, "--trim-lda False --retrain True ", None),
+    ("randisco",        None, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_randisco.json"),
     # ("pure_lda",        None, "", None),
     # ("pure_pca",        None, "", None),
-    ("pcdisc",          189839, "--trim-lda False --retrain True ", None),
+    ("pcdisc",          None, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_sbgatto.json"),
     # ("lpca",            None, "", None),
 
     # ("mirror_lda",      None, "", None),
@@ -174,8 +174,7 @@ class ExperimentsBuilder(object):
                     )
 
                     # Create as many parallel one as required
-                    if sigopt_runs is None:
-                        sigopt_runs = experiment.observation_budget - experiment.progress.observation_count
+                    sigopt_repeat = experiment.observation_budget - experiment.progress.observation_count
                     experiments.append([Experiment(
                         experiment_name=experiment_name,
                         model_name=model,
@@ -184,7 +183,7 @@ class ExperimentsBuilder(object):
                         epochs=epochs, #int(epochs/5) if "CB55" in dataset else epochs,
                         init=init,
                         additional=additional
-                    ) for _ in range(sigopt_parallel_bandwidth + sigopt_runs)])
+                    ) for _ in range(sigopt_parallel_bandwidth + sigopt_repeat)])
         # Flatten the list of lists of experiments s.t [a,a,a,b,b,b,c,c,c] -> [a,b,c,a,b,c,a,b,c]
         return [y for x in itertools.zip_longest(*experiments) for y in x if y is not None]
 
