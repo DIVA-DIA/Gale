@@ -276,7 +276,7 @@ class ImageFolderSegmentationDataset(data.Dataset):
         tuple
             img and gt after transformations
         """
-        if self.twin_transform is not None:
+        if self.twin_transform is not None and not self.is_test:
             img, gt = self.twin_transform(img, gt)
 
         if self.transform is not None:
