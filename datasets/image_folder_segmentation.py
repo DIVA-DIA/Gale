@@ -96,7 +96,7 @@ class ImageFolderSegmentationDataset(data.Dataset):
         # Init list
         self.root = path
         self.classes = classes
-        self.num_workers = workers
+        self.num_workers = 1 if 'test' in self.root else workers
         self.imgs_in_memory = imgs_in_memory
         self.crops_per_image = crops_per_image
         self.crop_size = crop_size

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 from torchvision import transforms
 
 from datasets.custom import transforms as custom_transforms
@@ -83,11 +84,10 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
                                              transforms.ToPILImage()]))
 
     @classmethod
-    def get_target_transform(cls, **kwargs):
-        trains_ds, _, _ = cls._get_datasets(**kwargs)
+    def get_target_transform(cls, classes, **kwargs):
         return OnlyTarget(transforms.Compose([
             # transforms the gt image into a one-hot encoded matrix
-            custom_transforms.OneHotEncodingDIVAHisDB(class_encodings=trains_ds.classes),
+            custom_transforms.OneHotEncodingDIVAHisDB(class_encodings=classes),
             # transforms the one hot encoding to argmax labels -> for the cross-entropy criterion
             custom_transforms.OneHotToPixelLabelling()]))
 
@@ -201,6 +201,44 @@ class SemanticSegmentationSetupHisDB(BaseSetup):
         df.index = ['mean[RGB]', 'std[RGB]', 'class_frequencies_weights[num_classes]', 'class_encodings']
         df.to_csv(os.path.join(input_folder, 'analytics.csv'), header=False)
         logging.warning(f'Created analytics.csv file for dataset located at {input_folder}')
+
+    @classmethod
+    def _dataloaders_from_datasets(cls, batch_size, train_ds, val_ds, test_ds, workers, **kwargs):
+        """
+        This function creates (and returns) dataloader from datasets objects.
+        Because we have to rebuild the image in a single thread we can not use the original implementation.
+
+        Parameters
+        ----------
+        batch_size : int
+            The size of the mini batch
+        train_ds : data.Dataset
+        val_ds : data.Dataset
+        test_ds : data.Dataset
+            Train, validation and test splits
+        workers:
+            Number of workers to use to load the data.
+
+        Returns
+        -------
+        train_loader : torch.utils.data.DataLoader
+        val_loader : torch.utils.data.DataLoader
+        test_loader : torch.utils.data.DataLoader
+            The dataloaders for each split passed
+        """
+        # Setup dataloaders
+        logging.debug('Setting up dataloaders')
+        train_loader = torch.utils.data.DataLoader(train_ds,
+                                                   shuffle=True,
+                                                   batch_size=batch_size,
+                                                   num_workers=workers)
+        val_loader = torch.utils.data.DataLoader(val_ds,
+                                                 batch_size=batch_size,
+                                                 num_workers=workers)
+        test_loader = torch.utils.data.DataLoader(test_ds,
+                                                  batch_size=batch_size,
+                                                  num_workers=test_ds.num_workers)
+        return train_loader, val_loader, test_loader
 
     @classmethod
     def load_class_encodings_from_file(cls, input_folder, **kwargs):

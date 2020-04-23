@@ -3,13 +3,12 @@
 # Delegated
 from .evaluate import SemanticSegmentationHisDBEvaluate
 from .setup import SemanticSegmentationSetupHisDB
+from .test import SemanticSegmentationHisDBTest
 from .train import SemanticSegmentationHisDBTrain
 from ..base import BaseRunner
 
 
 class SemanticSegmentationHisDB(BaseRunner):
-    class_encoding = None
-    img_names_sizes_dict = None
 
     def __init__(self):
         super().__init__()
@@ -21,9 +20,9 @@ class SemanticSegmentationHisDB(BaseRunner):
         """
         # Setting up the dataloaders
         train_loader, val_loader, test_loader = self.setup.set_up_dataloaders(**kwargs)
-        self.class_encoding = train_loader.dataset.classes
-        self.img_names_sizes_dict = dict(test_loader.dataset.img_names_sizes)  # (gt_img_name, img_size (H, W))
-        num_classes = len(self.class_encoding)
+        class_encoding = train_loader.dataset.classes
+        # img_names_sizes_dict = dict(test_loader.dataset.img_names_sizes)  # (gt_img_name, img_size (H, W))
+        num_classes = len(class_encoding)
 
         # return model, len(cls.class_encoding), best_value, train_loader, val_loader, test_loader, optimizer, criterion
 
@@ -67,6 +66,7 @@ class SemanticSegmentationHisDB(BaseRunner):
             "criterion": criterion,
             "batch_lr_schedulers": batch_lr_schedulers,
             "epoch_lr_schedulers": epoch_lr_schedulers,
+            "class_encoding": class_encoding
         }
 
     ####################################################################################################################
@@ -74,19 +74,16 @@ class SemanticSegmentationHisDB(BaseRunner):
     def _train(cls, train_loader, **kwargs):
         return SemanticSegmentationHisDBTrain.run(data_loader=train_loader,
                                                   logging_label='train',
-                                                  class_encodings=cls.class_encoding,
                                                   **kwargs)
 
     @classmethod
     def _validate(cls, val_loader, **kwargs):
         return SemanticSegmentationHisDBEvaluate.run(data_loader=val_loader,
-                                                     logging_label='train',
-                                                     class_encodings=cls.class_encoding,
+                                                     logging_label='val',
                                                      **kwargs)
 
     @classmethod
     def _test(cls, test_loader, **kwargs):
-        return SemanticSegmentationHisDBEvaluate.run(data_loader=test_loader,
-                                                     logging_label='train',
-                                                     class_encodings=cls.class_encoding,
-                                                     **kwargs)
+        return SemanticSegmentationHisDBTest.run(data_loader=test_loader,
+                                                 logging_label='test',
+                                                 **kwargs)
