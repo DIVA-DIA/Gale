@@ -19,7 +19,7 @@ SIGOPT_PROJECT = "mahpd"
 SIGOPT_PARALLEL_BANDWIDTH = 1
 
 # Init System Parameters #################################################
-MAX_PARALLEL_EXPERIMENTS = 4
+MAX_PARALLEL_EXPERIMENTS = 2
 
 # GPUs_LIST = range(torch.cuda.device_count())
 # GPUs_LIST = [3, 4, 5, 6, 7, 8]
@@ -67,11 +67,11 @@ DATASETS = [
 
 # (Init function, sigopt-project-id, --extra, sigopt-file)
 RUNS = [
-    ("random",          189837, "", None),
-    ("randisco",        None, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_randisco.json"),
+    # ("random",          189837, "", None),
+    ("randisco",        191969, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_randisco.json"),
     # ("pure_lda",        None, "", None),
     # ("pure_pca",        None, "", None),
-    ("pcdisc",          None, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_sbgatto.json"),
+    ("pcdisc",          191970, "--trim-lda False --retrain True ", "sweep/configs/sigopt_final_config_sbgatto.json"),
     # ("lpca",            None, "", None),
 
     # ("mirror_lda",      None, "", None),
