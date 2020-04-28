@@ -6,7 +6,7 @@ from template.runner.base.base_routine import BaseRoutine
 from template.runner.semantic_segmentation_DIVAHisDB.util.accuracy import accuracy_segmentation
 from util.metric_logger import MetricLogger
 
-
+from torchvision import transforms
 # Torch related stuff
 
 
@@ -38,11 +38,8 @@ class SemanticSegmentationHisDBTrain(BaseRoutine):
         except AttributeError:
             MetricLogger().update(key='loss', value=loss.data[0], n=len(input_batch))
 
-        output_argmax = np.array([np.argmax(o, axis=0) for o in output.data.cpu().numpy()])
-        target_argmax = target.data.cpu().numpy()
-
         # Compute and record the accuracy
-        _, _, mean_iu, _ = accuracy_segmentation(target_argmax, output_argmax, kwargs['num_classes'])
+        _, _, mean_iu, _ = accuracy_segmentation(target.data.cpu().numpy(), get_argmax(output), kwargs['num_classes'])
         MetricLogger().update(key='meanIU', value=mean_iu, n=len(input_batch))
 
         optimizer = kwargs['optimizer']
@@ -56,3 +53,8 @@ class SemanticSegmentationHisDBTrain(BaseRoutine):
     @classmethod
     def main_metric(cls) -> str:
         return "meanIU"
+
+
+def get_argmax(output):
+    """ Gets the argmax values for each sample in the minibatch"""
+    return np.array([np.argmax(o, axis=0) for o in output.data.cpu().numpy()])

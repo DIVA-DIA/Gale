@@ -8,7 +8,8 @@ from PIL import Image
 from tqdm import tqdm
 
 from datasets.custom.functional import gt_to_one_hot_hisdb
-from template.runner.semantic_segmentation_DIVAHisDB.evaluate import get_argmax, SemanticSegmentationHisDBEvaluate
+from template.runner.semantic_segmentation_DIVAHisDB.evaluate import SemanticSegmentationHisDBEvaluate
+from .train import get_argmax
 from template.runner.semantic_segmentation_DIVAHisDB.util.accuracy import accuracy_segmentation
 from util.TB_writer import TBWriter
 from util.metric_logger import MetricLogger, ScalarValue
