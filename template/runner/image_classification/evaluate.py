@@ -27,21 +27,21 @@ class ImageClassificationEvaluate(ImageClassificationTrain):
         MetricLogger().add_confusion_matrix_meter(tag='confusion_matrix', num_classes=num_classes)
 
     @classmethod
-    def run_one_mini_batch(cls, model, criterion, input_img, target, **kwargs):
+    def run_one_mini_batch(cls, model, criterion, input_batch, target, **kwargs):
         """See parent method for documentation"""
         # Compute output
-        output = model(input_img)
+        output = model(input_batch)
 
         # Unpack the target
         target = target['category_id']
 
         # Compute and record the loss
         loss = criterion(output, target)
-        MetricLogger().update(key='loss', value=loss.item(), n=len(input_img))
+        MetricLogger().update(key='loss', value=loss.item(), n=len(input_batch))
 
         # Compute and record the accuracy
         acc = accuracy(output.data, target.data, topk=(1,))[0]
-        MetricLogger().update(key='accuracy', value=acc[0], n=len(input_img))
+        MetricLogger().update(key='accuracy', value=acc[0], n=len(input_batch))
 
         # Update the confusion matrix
         MetricLogger().update(key='confusion_matrix', p=np.argmax(output.data.cpu().numpy(), axis=1),
