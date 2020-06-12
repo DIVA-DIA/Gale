@@ -176,7 +176,7 @@ class InitBaselineVGGLike(nn.Module):
 #######################################################################################################################
 @Model
 class LDApaper(nn.Module):
-    expected_input_size = (28, 28)
+    expected_input_size = (23, 23)
 
     def __init__(self, num_classes, activation_function='swish', **kwargs):
         super(LDApaper, self).__init__()
