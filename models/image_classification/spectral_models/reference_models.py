@@ -20,11 +20,13 @@ class Flatten(nn.Module):
 @Model
 class BaselineConv(nn.Module):
 
-    def __init__(self, output_channels=10, in_channels=3, ocl1=32,  # output channels layer 1
+    expected_input_size = (149, 149)
+
+    def __init__(self, num_classes, in_channels=3, ocl1=32,  # output channels layer 1
                  **kwargs):
         super(BaselineConv, self).__init__()
 
-        self.expected_input_size = (149, 149)
+
         self.features = []
 
         self.encoder = nn.Sequential(
@@ -39,7 +41,7 @@ class BaselineConv(nn.Module):
         self.classifier = nn.Sequential(
             nn.AvgPool2d(kernel_size=16, stride=1),
             Flatten(),
-            nn.Linear(ocl1 * 4, output_channels)
+            nn.Linear(ocl1 * 4, num_classes)
         )
 
     def forward(self, x):
@@ -50,11 +52,13 @@ class BaselineConv(nn.Module):
 @Model
 class BaselineDeep(nn.Module):
 
-    def __init__(self, output_channels=10, in_channels=3, ocl1=32,  # output channels layer 1
+    expected_input_size = (149, 149)
+
+    def __init__(self, num_classes, in_channels=3, ocl1=32,  # output channels layer 1
                  **kwargs):
         super(BaselineDeep, self).__init__()
 
-        self.expected_input_size = (149, 149)
+
         self.features = []
 
         self.encoder = nn.Sequential(
@@ -71,7 +75,7 @@ class BaselineDeep(nn.Module):
         self.classifier = nn.Sequential(
             nn.AvgPool2d(kernel_size=16, stride=1),
             Flatten(),
-            nn.Linear(ocl1 * 4, output_channels)
+            nn.Linear(ocl1 * 4, num_classes)
         )
 
     def forward(self, x):
@@ -81,11 +85,14 @@ class BaselineDeep(nn.Module):
 
 @Model
 class RNDFirst(nn.Module):
-    def __init__(self, output_channels=10, in_channels=3, ocl1=32,  # output channels layer 1
+
+    expected_input_size = (149, 149)
+
+    def __init__(self, num_classes, in_channels=3, ocl1=32,  # output channels layer 1
                  **kwargs):
         super().__init__()
 
-        self.expected_input_size = (149, 149)
+
         self.features = []
 
         self.encoder = nn.Sequential(
@@ -101,7 +108,7 @@ class RNDFirst(nn.Module):
         self.classifier = nn.Sequential(
             nn.AvgPool2d(kernel_size=16, stride=1),
             Flatten(),
-            nn.Linear(ocl1 * 4, output_channels)
+            nn.Linear(ocl1 * 4, num_classes)
         )
 
     def forward(self, x):
@@ -110,11 +117,13 @@ class RNDFirst(nn.Module):
 
 @Model
 class RNDBidir(nn.Module):
-    def __init__(self, output_channels=10, in_channels=3, ocl1=32,  # output channels layer 1
+
+    expected_input_size = (149, 149)
+
+    def __init__(self, num_classes, in_channels=3, ocl1=32,  # output channels layer 1
                  **kwargs):
         super().__init__()
 
-        self.expected_input_size = (149, 149)
         self.features = []
 
         self.encoder = nn.Sequential(
@@ -132,7 +141,7 @@ class RNDBidir(nn.Module):
         self.classifier = nn.Sequential(
             nn.AvgPool2d(kernel_size=16, stride=1),
             Flatten(),
-            nn.Linear(ocl1 * 4, output_channels)
+            nn.Linear(ocl1 * 4, num_classes)
         )
 
     def forward(self, x):
