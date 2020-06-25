@@ -278,9 +278,9 @@ class RunMe:
         metrics = [{
             'name' : "validation_accuracy",
             'objective' : "maximize",
-            'threshold' : 0
         }]
         if minimize_best_epoch:
+            metrics[0]['threshold'] = 0
             metrics.append({
                 'name' : "best_epoch",
                 'objective' : "minimize",
