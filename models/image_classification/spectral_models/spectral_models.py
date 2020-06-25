@@ -140,8 +140,7 @@ class FFT_1(nn.Module):
 
     expected_input_size = (149, 149)
 
-    def __init__(self, num_classes, in_channels=3, ocl1=26,  # output channels layer 1
-                 fixed=False, scaling_factor=1.0, **kwargs):
+    def __init__(self, num_classes, in_channels=3, ocl1=26, fixed=False, **kwargs):
         super().__init__()
 
 
@@ -204,7 +203,7 @@ class FFT_2(nn.Module):
         self.classifier = nn.Sequential(
             nn.AvgPool2d(kernel_size=16, stride=1),
             Flatten(),
-            nn.Linear(ocl1 * 8, num_classes)
+            nn.Linear(ocl1 * 4, num_classes)
         )
 
     def forward(self, x):
