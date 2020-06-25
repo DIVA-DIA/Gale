@@ -19,23 +19,17 @@ class Flatten(nn.Module):
 
 @Model
 class BaselineConv(nn.Module):
-
     expected_input_size = (149, 149)
 
     def __init__(self, num_classes, in_channels=3, ocl1=32,  # output channels layer 1
                  **kwargs):
         super(BaselineConv, self).__init__()
-
-
         self.features = []
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels, ocl1, kernel_size=8, stride=3, padding=0),
-            nn.LeakyReLU(),
-            nn.Conv2d(ocl1, ocl1 * 2, kernel_size=5, stride=3, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(ocl1 * 2, ocl1 * 4, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
+            nn.Conv2d(in_channels,     ocl1, kernel_size=8, stride=3, padding=0), nn.LeakyReLU(),
+            nn.Conv2d(       ocl1, ocl1 * 2, kernel_size=5, stride=3, padding=1), nn.LeakyReLU(),
+            nn.Conv2d(   ocl1 * 2, ocl1 * 4, kernel_size=3, stride=1, padding=1), nn.LeakyReLU(),
         )
 
         self.classifier = nn.Sequential(
@@ -62,14 +56,10 @@ class BaselineDeep(nn.Module):
         self.features = []
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels, ocl1, kernel_size=8, stride=3, padding=0),
-            nn.LeakyReLU(),
-            nn.Conv2d(ocl1, ocl1, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(ocl1, ocl1 * 2, kernel_size=5, stride=3, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(ocl1 * 2, ocl1 * 4, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
+            nn.Conv2d(in_channels,     ocl1, kernel_size=8, stride=3, padding=0), nn.LeakyReLU(),
+            nn.Conv2d(       ocl1,     ocl1, kernel_size=3, stride=1, padding=1), nn.LeakyReLU(),
+            nn.Conv2d(       ocl1, ocl1 * 2, kernel_size=5, stride=3, padding=1), nn.LeakyReLU(),
+            nn.Conv2d(   ocl1 * 2, ocl1 * 4, kernel_size=3, stride=1, padding=1), nn.LeakyReLU(),
         )
 
         self.classifier = nn.Sequential(
@@ -81,70 +71,3 @@ class BaselineDeep(nn.Module):
     def forward(self, x):
         self.features = self.encoder(x)
         return self.classifier(self.features)
-
-
-@Model
-class RNDFirst(nn.Module):
-
-    expected_input_size = (149, 149)
-
-    def __init__(self, num_classes, in_channels=3, ocl1=32,  # output channels layer 1
-                 **kwargs):
-        super().__init__()
-
-
-        self.features = []
-
-        self.encoder = nn.Sequential(
-            DiscreteCosine2dConvBlock(in_channels, ocl1, kernel_size=8, stride=3, padding=0,
-                                      spectral_width=48, spectral_height=48, random_init=True),
-            nn.LeakyReLU(),
-            nn.Conv2d(ocl1, ocl1 * 2, kernel_size=5, stride=3, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(ocl1 * 2, ocl1 * 4, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
-        )
-
-        self.classifier = nn.Sequential(
-            nn.AvgPool2d(kernel_size=16, stride=1),
-            Flatten(),
-            nn.Linear(ocl1 * 4, num_classes)
-        )
-
-    def forward(self, x):
-        self.features = self.encoder(x)
-        return self.classifier(self.features)
-
-@Model
-class RNDBidir(nn.Module):
-
-    expected_input_size = (149, 149)
-
-    def __init__(self, num_classes, in_channels=3, ocl1=32,  # output channels layer 1
-                 **kwargs):
-        super().__init__()
-
-        self.features = []
-
-        self.encoder = nn.Sequential(
-            DiscreteCosine2dConvBlock(in_channels, ocl1, kernel_size=8, stride=3, padding=0,
-                                      spectral_width=48, spectral_height=48, random_init=True),
-            nn.LeakyReLU(),
-            InverseDiscreteCosine2dConvBlock(ocl1, ocl1 * 2, kernel_size=5, stride=3, padding=1,
-                                             spectral_width=16, spectral_height=16, random_init=True),
-            nn.LeakyReLU(),
-            DiscreteCosine2dConvBlock(ocl1 * 2, ocl1 * 4, kernel_size=3, stride=1, padding=1,
-                                      spectral_width=16, spectral_height=16, random_init=True),
-            nn.LeakyReLU(),
-        )
-
-        self.classifier = nn.Sequential(
-            nn.AvgPool2d(kernel_size=16, stride=1),
-            Flatten(),
-            nn.Linear(ocl1 * 4, num_classes)
-        )
-
-    def forward(self, x):
-        self.features = self.encoder(x)
-        return self.classifier(self.features)
-
