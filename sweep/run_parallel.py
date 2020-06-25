@@ -13,7 +13,7 @@ from template.RunMe import RunMe
 
 # Init SigOpt Paramters ##################################################
 SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+# SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
 SIGOPT_FILE = "sweep/configs/sigopt_final_config_standard.json"
 SIGOPT_PROJECT = "mahpd"
 SIGOPT_PARALLEL_BANDWIDTH = 1
@@ -35,7 +35,7 @@ OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/o
 
 # Experiment Parameters ##################################################
 EXPERIMENT_NAME_PREFIX = "spectral"
-EPOCHS = 6 # For CB55 is /5
+EPOCHS = 60 # For CB55 is /5
 SIGOPT_RUNS = 30 # 10 * num of parameters to optimize + 10 buffer + 10 top performing
 MULTI_RUN = None # Use None for disabling!
 RUNS_PER_VARIANCE = 20
@@ -249,7 +249,7 @@ class ExperimentsBuilder(object):
         experiments = []
         for dataset in datasets:
             for model in models:
-                for (init, experiment_id, extra) in runs:
+                for (init, experiment_id, extra, _) in runs:
                     # Construct experiment name
                     experiment_name = ExperimentsBuilder._construct_experiment_name(
                         experiment_name_prefix=experiment_name_prefix, dataset=dataset, init=init, model=model,
@@ -268,7 +268,7 @@ class ExperimentsBuilder(object):
                             additional=(
                                 f"{extra} "
                                 f"--wandb-project sigopt_{experiment_name_prefix} "
-                                f"-j {ExperimentsBuilder.num_workers():d} "
+                                f"-j {ExperimentProcess.num_workers():d} "
                                 f"{' '.join(['--' + k + ' ' + str(v) for k, v in best_parameters.items()])} "
                             )
                         ))
@@ -413,24 +413,24 @@ if __name__ == '__main__':
     # Init queue item
     queue = Queue()
 
-    print("sigopt...")
-    experiments = []
-    experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
-        experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
-        datasets=DATASETS,
-        models=MODELS,
-        runs=RUNS,
-        multi_run=MULTI_RUN,
-        epochs=EPOCHS,
-        output_folder=OUTPUT_FOLDER,
-        sigopt_token=SIGOPT_TOKEN,
-        sigopt_file=SIGOPT_FILE,
-        sigopt_project=SIGOPT_PROJECT,
-        sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
-        sigopt_runs=SIGOPT_RUNS,
-    ))
-    [queue.put(e) for e in experiments]
-    run_experiments(GPUs_LIST, MAX_PROCESSES_PER_GPU, queue)
+    # print("sigopt...")
+    # experiments = []
+    # experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
+    #     experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
+    #     datasets=DATASETS,
+    #     models=MODELS,
+    #     runs=RUNS,
+    #     multi_run=MULTI_RUN,
+    #     epochs=EPOCHS,
+    #     output_folder=OUTPUT_FOLDER,
+    #     sigopt_token=SIGOPT_TOKEN,
+    #     sigopt_file=SIGOPT_FILE,
+    #     sigopt_project=SIGOPT_PROJECT,
+    #     sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
+    #     sigopt_runs=SIGOPT_RUNS,
+    # ))
+    # [queue.put(e) for e in experiments]
+    # run_experiments(GPUs_LIST, MAX_PROCESSES_PER_GPU, queue)
 
     print("variance...")
     experiments = []
