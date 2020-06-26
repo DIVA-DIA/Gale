@@ -20,43 +20,43 @@ class CLArguments(BaseCLArguments):
             args.split_type = "stratified_tag"
 
         # Inject wisdom for default parameters based on the init function
-        init_function = args.init_function
-        if init_function == "randisco":    # x x x - 0 0 0 - 0 1 0  (lin 110 if no retrain)
-            args.retrain_standardize = 1
-
-        if init_function is "pure_lda":    # 0 1 1 - 1 0 0
-            args.conv_standardize = 1
-            args.conv_scale = 1
-            args.lin_normalize = 1
-            args.retrain_standardize = 1
-
-        if init_function == "pure_pca":    # 1 1 1 - x x x
-            args.conv_normalize = 1
-            args.conv_standardize = 1
-            args.conv_scale = 1
-            args.retrain_standardize = 1
-
-        if init_function == "pcdisc":      # 1 1 1 - 1 1 1
-            args.conv_normalize = 1
-            args.conv_standardize = 1
-            args.conv_scale = 1
-            args.lin_normalize = 1
-            args.lin_standardize = 1
-            args.lin_scale = 1
-            args.retrain_standardize = 1
-
-        if init_function == "lpca":        # 0 0 1 - 1 0 0
-            args.conv_scale = 1
-            args.lin_normalize = 1
-
-        if init_function == "greedya":      # 1 1 1 - 1 1 1
-            args.conv_normalize = 1
-            args.conv_standardize = 1
-            args.conv_scale = 1
-            args.lin_normalize = 1
-            args.lin_standardize = 1
-            args.lin_scale = 1
-            args.retrain_standardize = 1
+        # init_function = args.init_function
+        # if init_function == "randisco":    # x x x - 0 0 0 - 0 1 0  (lin 110 if no retrain)
+        #     args.retrain_standardize = 1
+        #
+        # if init_function is "pure_lda":    # 0 1 1 - 1 0 0
+        #     args.conv_standardize = 1
+        #     args.conv_scale = 1
+        #     args.lin_normalize = 1
+        #     args.retrain_standardize = 1
+        #
+        # if init_function == "pure_pca":    # 1 1 1 - x x x
+        #     args.conv_normalize = 1
+        #     args.conv_standardize = 1
+        #     args.conv_scale = 1
+        #     args.retrain_standardize = 1
+        #
+        # if init_function == "pcdisc":      # 1 1 1 - 1 1 1
+        #     args.conv_normalize = 1
+        #     args.conv_standardize = 1
+        #     args.conv_scale = 1
+        #     args.lin_normalize = 1
+        #     args.lin_standardize = 1
+        #     args.lin_scale = 1
+        #     args.retrain_standardize = 1
+        #
+        # if init_function == "lpca":        # 0 0 1 - 1 0 0
+        #     args.conv_scale = 1
+        #     args.lin_normalize = 1
+        #
+        # if init_function == "greedya":      # 1 1 1 - 1 1 1
+        #     args.conv_normalize = 1
+        #     args.conv_standardize = 1
+        #     args.conv_scale = 1
+        #     args.lin_normalize = 1
+        #     args.lin_standardize = 1
+        #     args.lin_scale = 1
+        #     args.retrain_standardize = 1
 
         return args, self.parser
 
@@ -128,6 +128,11 @@ class CLArguments(BaseCLArguments):
                                  help='Which activation function to use in the model for non-linearity')
 
         # Flags for normalizations
+        parser_init.add_argument("--lsuv",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for using LSUV for scaling weights")
+
         parser_init.add_argument("--conv-normalize",
                                  type=int,
                                  default=0,

@@ -19,12 +19,12 @@ SIGOPT_PROJECT = "mahpd"
 SIGOPT_PARALLEL_BANDWIDTH = 1
 
 # Init System Parameters #################################################
-MAX_PARALLEL_EXPERIMENTS = 16
+MAX_PARALLEL_EXPERIMENTS = 6
 
 # GPUs_LIST = range(torch.cuda.device_count())
 # GPUs_LIST = [3, 4, 5, 6, 7, 8]
-GPUs_LIST = [1, 2, 3, 4, 5, 6, 7]
-MAX_PROCESSES_PER_GPU = 4
+GPUs_LIST = [5, 6, 7, 8]
+MAX_PROCESSES_PER_GPU = 5
 
 # CPUs_LIST = range(mp.cpu_count())
 CPUs_LIST = range(5, 64)
@@ -34,10 +34,10 @@ SERVER_PREFIX = '' if SERVER == 'dana' else '/HOME/albertim'
 OUTPUT_FOLDER = ('/home/albertim' if SERVER == 'dana' else  SERVER_PREFIX) + "/output_init"
 
 # Experiment Parameters ##################################################
-EXPERIMENT_NAME_PREFIX = "spectral"
-EPOCHS = 60 # For CB55 is /5
-SIGOPT_RUNS = 30 # 10 * num of parameters to optimize + 10 buffer + 10 top performing
-MULTI_RUN = None # Use None for disabling!
+EXPERIMENT_NAME_PREFIX = "lsuv"
+EPOCHS = 30 # For CB55 is /5
+SIGOPT_RUNS = None # 10 * num of parameters to optimize + 10 buffer + 10 top performing
+MULTI_RUN = 3 # Use None for disabling!
 RUNS_PER_VARIANCE = 20
 
 
@@ -46,25 +46,25 @@ RUNS_PER_VARIANCE = 20
 
 MODELS = [
     # "LDA_Simple",
-    # "InitBaseline",
+    "InitBaseline",
     # "InitBaselineVGGLike",
     # "LDApaper",
     # "babyresnet18",
     #"raieresnet18",
-    "DCT_2",
-    "DCT_3",
-    "RND_2",
-    "FFT_2",
+    # "DCT_2",
+    # "DCT_3",
+    # "RND_2",
+    # "FFT_2",
 ]
 
 DATASETS = [
-    SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55_149",
-    SERVER_PREFIX + "/dataset/HAM10000",
+    # SERVER_PREFIX + "/dataset/DIVA-HisDB/classification/CB55_149",
+    # SERVER_PREFIX + "/dataset/HAM10000",
     # SERVER_PREFIX + "/dataset/CIFAR10",
-    # SERVER_PREFIX + "/dataset/CINIC10",
+    SERVER_PREFIX + "/dataset/CINIC10",
     # "/var/cache/fscache/CINIC10",
-    SERVER_PREFIX + "/dataset/ColorectalHist",
-    SERVER_PREFIX + "/dataset/Flowers",
+    # SERVER_PREFIX + "/dataset/ColorectalHist",
+    # SERVER_PREFIX + "/dataset/Flowers",
     # SERVER_PREFIX + "/dataset/ImageNet",
     # SERVER_PREFIX + "/dataset/signatures/GPDS-last100/genuine",
 ]
@@ -84,9 +84,18 @@ DATASETS = [
 #     # ("reverse_pca",     None, "", None),
 #     # ("relda",           None, "", None),
 # ]
+#
+# RUNS = [
+#     (None, None, "", None),
+# ]
 
 RUNS = [
-    (None, None, "", None),
+    ("random",   223922, "--lsuv 0", None),
+    ("random",   223923, "--lsuv 1", None),
+    ("random",   223928, "--lsuv 2", None),
+    ("pure_lda", 223929, "--lsuv 0", None),
+    ("pure_lda", 223930, "--lsuv 1", None),
+    ("pure_lda", 223931, "--lsuv 2", None),
 ]
 
 ##########################################################################
@@ -178,8 +187,8 @@ class ExperimentsBuilder(object):
                         f"--sigopt-token {sigopt_token:s} "
                         f"--sigopt-experiment-id {experiment_id} "
                         f"-j {ExperimentProcess.num_workers():d} "                        
-                        f"--inmem "
-                        f"--patches-cap 200000 "
+                        f"--nesterov "
+                        f"--patches-cap 50000 "                       
                         f"--validation-interval 2 "
                     )
                     if multi_run is not None:
@@ -413,38 +422,38 @@ if __name__ == '__main__':
     # Init queue item
     queue = Queue()
 
-    # print("sigopt...")
-    # experiments = []
-    # experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
-    #     experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
-    #     datasets=DATASETS,
-    #     models=MODELS,
-    #     runs=RUNS,
-    #     multi_run=MULTI_RUN,
-    #     epochs=EPOCHS,
-    #     output_folder=OUTPUT_FOLDER,
-    #     sigopt_token=SIGOPT_TOKEN,
-    #     sigopt_file=SIGOPT_FILE,
-    #     sigopt_project=SIGOPT_PROJECT,
-    #     sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
-    #     sigopt_runs=SIGOPT_RUNS,
-    # ))
-    # [queue.put(e) for e in experiments]
-    # run_experiments(GPUs_LIST, MAX_PROCESSES_PER_GPU, queue)
-
-    print("variance...")
+    print("sigopt...")
     experiments = []
-    experiments.extend(ExperimentsBuilder.build_variance_combinations(
+    experiments.extend(ExperimentsBuilder.build_sigopt_combinations(
         experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
         datasets=DATASETS,
         models=MODELS,
         runs=RUNS,
-        runs_per_variance=RUNS_PER_VARIANCE,
+        multi_run=MULTI_RUN,
         epochs=EPOCHS,
         output_folder=OUTPUT_FOLDER,
         sigopt_token=SIGOPT_TOKEN,
+        sigopt_file=SIGOPT_FILE,
+        sigopt_project=SIGOPT_PROJECT,
+        sigopt_parallel_bandwidth=SIGOPT_PARALLEL_BANDWIDTH,
+        sigopt_runs=SIGOPT_RUNS,
     ))
     [queue.put(e) for e in experiments]
     run_experiments(GPUs_LIST, MAX_PROCESSES_PER_GPU, queue)
+
+    # print("variance...")
+    # experiments = []
+    # experiments.extend(ExperimentsBuilder.build_variance_combinations(
+    #     experiment_name_prefix=EXPERIMENT_NAME_PREFIX,
+    #     datasets=DATASETS,
+    #     models=MODELS,
+    #     runs=RUNS,
+    #     runs_per_variance=RUNS_PER_VARIANCE,
+    #     epochs=EPOCHS,
+    #     output_folder=OUTPUT_FOLDER,
+    #     sigopt_token=SIGOPT_TOKEN,
+    # ))
+    # [queue.put(e) for e in experiments]
+    # run_experiments(GPUs_LIST, MAX_PROCESSES_PER_GPU, queue)
 
     print("...finished!")

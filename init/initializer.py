@@ -20,13 +20,14 @@ from tqdm import tqdm
 
 from init import advanced_init
 from init.advanced_init import minibatches_to_matrix
+from models.image_classification.MaPhD_models import Swish
 from template.runner.base.base_routine import BaseRoutine
 
 
 def init_model(**kwargs):
     """ Initialize a standard CNN composed by convolutional layer followed by fully connected layers."""
-    if 'random' in kwargs['init_function']:
-        return
+    # if 'random' in kwargs['init_function']:
+    #     return
     # Collect initial data
     X, y = _collect_initial_data(**kwargs)
     # Init the model
@@ -34,7 +35,7 @@ def init_model(**kwargs):
     _init_module(X=X, y=y, prefix="", **kwargs)
 
 
-def _init_module(X, y, model, prefix, sub_model=None, **kwargs):
+def _init_module(X, y, model, prefix, lsuv, sub_model=None, **kwargs):
     """Initialize a model passed by argument with the init function chosen.
 
     This function is used recursively for going deep on those blocks which have children such as nn.Sequential or
@@ -51,6 +52,8 @@ def _init_module(X, y, model, prefix, sub_model=None, **kwargs):
         The model to initialize
     prefix : str
         String to pre-pend to logging the layer number
+    lsuv: bool
+        Flag for using LSUV for scaling the weights of a layer
     sub_model : nn.Module
         The block of the network to initialize when performing a recursive call of this function
     """
@@ -96,6 +99,7 @@ def _init_module(X, y, model, prefix, sub_model=None, **kwargs):
                 X=tmpx,
                 y=y,
                 model=model,
+                lsuv=lsuv,
                 sub_model=module,
                 prefix=f"{prefix}{index}.",
                 **kwargs
@@ -104,18 +108,75 @@ def _init_module(X, y, model, prefix, sub_model=None, **kwargs):
         #######################################################################
         # Forward pass of this module
         logging.info(f'Forward pass {prefix}{index}')
-        for i, _ in tqdm(enumerate(X), total=len(X), unit='batch', ncols=130, leave=False):
-            # Move data to GPU if desired
-            X[i] = BaseRoutine().move_to_device(X[i], **kwargs)[0]
-            # Forward pass
-            X[i] = module(X[i])
-            # Bring data back to CPU for further computing data-driven inits
-            X[i] = BaseRoutine().move_to_device(X[i], no_cuda=True)[0]
+        if lsuv and hasattr(module, "weight"):
+            X = _LSUV(X, module, lsuv, **kwargs)
+        else:
+            X = _forward_pass(X, module, **kwargs)
 
     # Free resources
     del X, y
     gc.collect()
 
+
+def _forward_pass(X, module, **kwargs):
+    for i, _ in tqdm(enumerate(X), total=len(X), unit='batch', ncols=130, leave=False):
+        # Move data to GPU if desired
+        X[i] = BaseRoutine().move_to_device(X[i], **kwargs)[0]
+        # Forward pass
+        X[i] = module(X[i])
+        # Bring data back to CPU for further computing data-driven inits
+        X[i] = BaseRoutine().move_to_device(X[i], no_cuda=True)[0]
+    return X
+
+
+def _LSUV(X, module, lsuv, target_var=1.0, target_mean=0.0, max_attempts=10, tolerance=0.1, **kwargs):
+    f = Swish()
+
+    if lsuv == 1:
+        logging.info(f'Starting LSUV init...')
+        attempt = 0
+        while True:
+            Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
+            data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
+            current_var = np.var(data)
+            if abs(current_var - target_var) < tolerance or attempt > max_attempts:
+                break
+            else:
+                logging.info(f"var[{attempt}]: {current_var}")
+                module.weight.data /= np.sqrt(current_var)
+                attempt += 1
+        logging.info(f'LSUV init done...')
+        del X
+        gc.collect()
+        return Y
+
+    if lsuv == 2:
+        logging.info(f'Starting LSUV init...')
+        attempt = 0
+        while True:
+            Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
+            data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
+
+            if len(data.shape) == 4:
+                current_var = np.var(data, axis=(0,2,3))
+            elif len(data.shape) == 2:
+                # Last classification layer
+                current_var = np.var(data, axis=0)
+            else:
+                # This should never happen but you know...
+                current_var = np.ones(module.weight.data.shape[0])
+
+            if abs(np.max(current_var) - target_var) < tolerance or attempt > max_attempts:
+                break
+            else:
+                logging.info(f"var[{attempt}]: {current_var}")
+                for i in range(module.weight.data.shape[0]):
+                    module.weight.data[i] /= np.sqrt(current_var[i])
+                attempt += 1
+        logging.info(f'LSUV init done...')
+        del X
+        gc.collect()
+        return Y
 
 def _compute_and_assign_parameters(module, init_function, **kwargs):
     """Compute data-driven parameters
