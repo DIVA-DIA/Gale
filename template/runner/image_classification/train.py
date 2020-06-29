@@ -1,4 +1,8 @@
 # DeepDIVA
+import logging
+
+import torch
+
 from evaluation.metrics import accuracy
 from template.runner.base.base_routine import BaseRoutine
 from util.metric_logger import MetricLogger
@@ -31,6 +35,8 @@ class ImageClassificationTrain(BaseRoutine):
         """
         # Compute output
         output = model(input)
+        if torch.isnan(output).any():
+            raise ValueError("Output of the network contains NaN")
 
         # Unpack the target
         target = target['category_id']

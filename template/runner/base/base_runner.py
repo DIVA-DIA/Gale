@@ -226,9 +226,12 @@ class BaseRunner(AbstractRunner):
                 for lr_scheduler in epoch_lr_schedulers:
                     lr_scheduler.step(val_value[epoch])
         except Exception as exp:
-            logging.error('Unhandled error: %s' % repr(exp))
-            logging.error(traceback.format_exc())
-            logging.error('Train routine ended with errors :(')
+            if isinstance(exp, ValueError):
+                logging.error(f"ValueError: {exp}")
+            else:
+                logging.error('Unhandled error: %s' % repr(exp))
+                logging.error(traceback.format_exc())
+                logging.error('Train routine ended with errors :(')
         finally:
             logging.info('Training done')
             return train_value, val_value
