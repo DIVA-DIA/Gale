@@ -66,7 +66,7 @@ def _init_module(X, y, model, prefix, lsuv, sub_model=None, **kwargs):
         # Recursive calls
         children_modules = list(sub_model.children())
     assert children_modules
-    # This is used to slip the downsampling module in ResNet-like architectures as it would fail
+    # This is used to skip the downsampling module in ResNet-like architectures as it would fail
     if hasattr(sub_model, 'downsample') and sub_model.downsample:
         children_modules = children_modules[:-1]
 
@@ -129,7 +129,7 @@ def _forward_pass(X, module, **kwargs):
     return X
 
 
-def _LSUV(X, module, lsuv, target_var=1.0, target_mean=0.0, max_attempts=10, tolerance=0.1, **kwargs):
+def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tolerance=0.1, **kwargs):
     f = Swish()
 
     if lsuv == 1:
@@ -138,19 +138,43 @@ def _LSUV(X, module, lsuv, target_var=1.0, target_mean=0.0, max_attempts=10, tol
         while True:
             Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
             data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
-            current_var = np.var(data)
-            if abs(current_var - target_var) < tolerance or attempt > max_attempts:
+            current_std = np.std(data)
+            if abs(current_std - target_std) < tolerance or attempt > max_attempts:
                 break
             else:
-                logging.info(f"var[{attempt}]: {current_var}")
-                module.weight.data /= np.sqrt(current_var)
+                logging.info(f"var[{attempt}]: {current_std}")
+                current_coef = target_std / (current_std + 1e-8);
+                module.weight.data *= current_coef
+                attempt += 1
+        logging.info(f'LSUV init done...')
+        del X
+        gc.collect()
+        return Y
+    # if lsuv == 2: its 4 but without the bias correction and the last layer also get corrected
+
+    if lsuv == 3:
+        logging.info(f'Starting LSUV init...')
+        attempt = 0
+        while True:
+            Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
+            data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
+            current_std = np.std(data)
+            current_mean = np.mean(data)
+            if abs(current_std - target_std) < tolerance or attempt > max_attempts:
+                break
+            else:
+                logging.info(f"var[{attempt}]: {current_std}")
+                current_coef = target_std / (current_std + 1e-8);
+                module.weight.data *= current_coef
+                if hasattr(module, "bias"):
+                    module.bias.data += target_mean - current_mean * current_coef
                 attempt += 1
         logging.info(f'LSUV init done...')
         del X
         gc.collect()
         return Y
 
-    if lsuv == 2:
+    if lsuv == 4:
         logging.info(f'Starting LSUV init...')
         attempt = 0
         while True:
@@ -158,20 +182,27 @@ def _LSUV(X, module, lsuv, target_var=1.0, target_mean=0.0, max_attempts=10, tol
             data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
 
             if len(data.shape) == 4:
-                current_var = np.var(data, axis=(0,2,3))
+                current_std = np.std(data, axis=(0,2,3))
+                current_mean = np.mean(data, axis=(0,2,3))
             elif len(data.shape) == 2:
                 # Last classification layer
-                current_var = np.var(data, axis=0)
-            else:
-                # This should never happen but you know...
-                current_var = np.ones(module.weight.data.shape[0])
-
-            if abs(np.max(current_var) - target_var) < tolerance or attempt > max_attempts:
+                # current_std = np.var(data, axis=0)
+                logging.info(f'Last classification layer: nothing to do...')
                 break
             else:
-                logging.info(f"var[{attempt}]: {current_var}")
+                logging.error(f'Something in the LSUV init went wrong...')
+                break
+
+            if abs(np.max(current_std) - target_std) < tolerance or attempt > max_attempts:
+                break
+            else:
+                logging.info(f"std[{attempt}]: {current_std}")
                 for i in range(module.weight.data.shape[0]):
-                    module.weight.data[i] /= np.sqrt(current_var[i])
+                    current_coef = target_std / (current_std[i] + 1e-8);
+                    module.weight.data[i] *= current_coef
+                    if hasattr(module, "bias"):
+                        module.bias.data[i] += target_mean - current_mean[i] * current_coef
+
                 attempt += 1
         logging.info(f'LSUV init done...')
         del X
@@ -207,7 +238,7 @@ def _compute_and_assign_parameters(module, init_function, **kwargs):
 
 def _check_memory_usage():
     """ Checks if the memory usage is below a threshold; otherwise sleeps until it is"""
-    MEMORY_THRESHOLD = 80
+    MEMORY_THRESHOLD = 95
     deadlock_counter = 0
     while psutil.virtual_memory().percent > MEMORY_THRESHOLD:
         logging.info(f"[MEMORY] Memory usage is above {MEMORY_THRESHOLD}%({psutil.virtual_memory().percent}). Sleeping 10 min")
