@@ -203,6 +203,11 @@ class RunMe:
             "value": float(np.mean(scores)),
             "value_stddev": float(np.std(scores)) if multi_run is not None else None
         }]
+        # If test-set has errors (i.e. there is -1 in it) then invalidate the validation scores as well s.t SigOpt knows about it
+        test = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
+        if np.max(test) <= 0:
+            values[0]['value'] = -1
+            values[0]['value_stddev'] = 0
 
         # If enabled, get the best epoch value
         if sigopt_best_epoch:
