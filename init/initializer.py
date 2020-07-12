@@ -151,7 +151,7 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
         gc.collect()
         return Y
 
-    if lsuv == 2: #its 4 but without the bias correction and the last layer also get corrected
+    if lsuv == 2: #its 4 but without the bias correction
         logging.info(f'Starting LSUV init...')
         attempt = 0
         while True:
@@ -163,7 +163,9 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
                 current_mean = np.mean(data, axis=(0, 2, 3))
             elif len(data.shape) == 2:
                 # Last classification layer
-                current_std = np.var(data, axis=0)
+                # current_std = np.var(data, axis=0)
+                logging.info(f'Last classification layer: nothing to do...')
+                break
             else:
                 logging.error(f'Something in the LSUV init went wrong...')
                 break
@@ -227,7 +229,6 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
                     module.weight.data[i] *= current_coef
                     if hasattr(module, "bias"):
                         module.bias.data[i] += target_mean - current_mean[i] * current_coef
-
                 attempt += 1
         logging.info(f'LSUV init done...')
         del X
