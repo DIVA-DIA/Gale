@@ -217,6 +217,40 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
                         module.bias.data[i] += target_mean - current_mean[i] * current_coef
                 attempt += 1
 
+    if lsuv == 5:
+        while True:
+            Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
+            data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
+
+            if len(data.shape) == 4:
+                current_std = np.std(data, axis=(0, 2, 3))
+                current_mean = np.mean(data, axis=(0, 2, 3))
+                if abs(np.max(current_std) - target_std) < tolerance or attempt > max_attempts:
+                    break
+                else:
+                    logging.info(f"std[{attempt}]: {current_std}")
+                    for i in range(module.weight.data.shape[0]):
+                        current_coef = target_std / (current_std[i] + 1e-8);
+                        module.weight.data[i] *= current_coef
+                        if hasattr(module, "bias"):
+                            module.bias.data[i] += target_mean - current_mean[i] * current_coef
+                    attempt += 1
+            elif len(data.shape) == 2:
+                current_std = np.std(data)
+                current_mean = np.mean(data)
+                if abs(current_std - target_std) < tolerance or attempt > max_attempts:
+                    break
+                else:
+                    logging.info(f"var[{attempt}]: {current_std}")
+                    current_coef = target_std / (current_std + 1e-8);
+                    module.weight.data *= current_coef
+                    if hasattr(module, "bias"):
+                        module.bias.data += target_mean - current_mean * current_coef
+                    attempt += 1
+            else:
+                logging.error(f'Something in the LSUV init went wrong...')
+                break
+
 
     logging.info(f'LSUV init done...')
     del X
