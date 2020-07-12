@@ -131,10 +131,10 @@ def _forward_pass(X, module, **kwargs):
 
 def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tolerance=0.1, **kwargs):
     f = Swish()
+    logging.info(f'Starting LSUV init {lsuv}...')
+    attempt = 0
 
     if lsuv == 1:
-        logging.info(f'Starting LSUV init...')
-        attempt = 0
         while True:
             Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
             data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
@@ -146,14 +146,8 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
                 current_coef = target_std / (current_std + 1e-8);
                 module.weight.data *= current_coef
                 attempt += 1
-        logging.info(f'LSUV init done...')
-        del X
-        gc.collect()
-        return Y
 
     if lsuv == 2: #its 4 but without the bias correction
-        logging.info(f'Starting LSUV init...')
-        attempt = 0
         while True:
             Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
             data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
@@ -180,8 +174,6 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
                 attempt += 1
 
     if lsuv == 3:
-        logging.info(f'Starting LSUV init...')
-        attempt = 0
         while True:
             Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
             data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
@@ -196,14 +188,8 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
                 if hasattr(module, "bias"):
                     module.bias.data += target_mean - current_mean * current_coef
                 attempt += 1
-        logging.info(f'LSUV init done...')
-        del X
-        gc.collect()
-        return Y
 
     if lsuv == 4:
-        logging.info(f'Starting LSUV init...')
-        attempt = 0
         while True:
             Y = _forward_pass(copy.deepcopy(X), module, **kwargs)
             data = np.array([f(e).data.numpy() for minibatch in Y for e in minibatch])
@@ -230,10 +216,12 @@ def _LSUV(X, module, lsuv, target_std=1.0, target_mean=0.0, max_attempts=10, tol
                     if hasattr(module, "bias"):
                         module.bias.data[i] += target_mean - current_mean[i] * current_coef
                 attempt += 1
-        logging.info(f'LSUV init done...')
-        del X
-        gc.collect()
-        return Y
+
+
+    logging.info(f'LSUV init done...')
+    del X
+    gc.collect()
+    return Y
 
 def _compute_and_assign_parameters(module, init_function, **kwargs):
     """Compute data-driven parameters
