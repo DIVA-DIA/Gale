@@ -474,6 +474,45 @@ def _train_classifier(classifier, init_input, init_labels, retrain_epochs, retra
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
+def orthogonal(
+        module,
+        **kwargs
+):
+    """
+    Initialize the layer with orthonormal matrices lt values from:
+    https://github.com/ducha-aiki/LSUV-pytorch/blob/master/LSUV.py
+
+   Orthogonal init code is taken (and adapted) from:
+   Lasagne https://github.com/Lasagne/Lasagne/blob/master/lasagne/init.py
+
+    Parameters
+    ----------
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    shape = module.weight.data.shape
+    flat_shape = shape[0], np.prod(shape[1:])
+    a = np.random.normal(0.0, 1.0, flat_shape)#w;
+    u, _, v = np.linalg.svd(a, full_matrices=False)
+    # pick the one with the correct shape
+    q = u if u.shape == flat_shape else v
+
+    W = q.reshape(shape)
+    B = np.zeros(module.weight.shape[0])
+
+    return torch.from_numpy(W), torch.from_numpy(B)
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
 def random(
         module,
         **kwargs
@@ -500,20 +539,6 @@ def random(
     B = module.bias.data.cpu().numpy() if module.bias is not None else np.zeros(module.weight.shape[0])
     return torch.from_numpy(W), torch.from_numpy(B)
 
-#TODO from https://github.com/ducha-aiki/LSUV-pytorch/blob/master/LSUV.py
-# Orthonorm init code is taken from Lasagne
-# https://github.com/Lasagne/Lasagne/blob/master/lasagne/init.py
-def svd_orthonormal(w):
-    shape = w.shape
-    if len(shape) < 2:
-        raise RuntimeError("Only shapes of length 2 or more are supported.")
-    flat_shape = (shape[0], np.prod(shape[1:]))
-    a = np.random.normal(0.0, 1.0, flat_shape)#w;
-    u, _, v = np.linalg.svd(a, full_matrices=False)
-    q = u if u.shape == flat_shape else v
-    print (shape, flat_shape)
-    q = q.reshape(shape)
-    return q.astype(np.float32)
 
 #######################################################################################################################
 #######################################################################################################################
