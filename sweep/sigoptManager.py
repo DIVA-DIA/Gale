@@ -72,8 +72,8 @@ def print_best_assignement_with_pattern(experiment_list, parts):
 
 
 if __name__ == '__main__':
-    SIGOPT_TOKEN = "NDGGFASXLCHVRUHNYOEXFYCNSLGBFNQMACUPRHGJONZYLGBZ"  # production
-    # SIGOPT_TOKEN = "EWODLUKIPZFBNVPCTJBQJGVMAISNLUXGFZNISBZYCPJKPSDE"  # dev
+    SIGOPT_TOKEN = "***"  # production
+    # SIGOPT_TOKEN = "***"  # dev
 
     conn = Connection(client_token=SIGOPT_TOKEN)
 
