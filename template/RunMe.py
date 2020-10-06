@@ -23,6 +23,7 @@ import tempfile
 import time
 import traceback
 from itertools import count
+from pathlib import Path
 
 import colorlog
 import numpy as np
@@ -512,6 +513,7 @@ class RunMe:
         TBWriter().add_scalar(tag='test/accuracy', scalar_value=np.mean(test_all))
         TBWriter().add_scalar(tag='test/accuracy_std', scalar_value=np.std(test_all))
 
+
         return {'train': train_all, 'val': val_all, 'test': test_all}
 
     @classmethod
@@ -734,8 +736,15 @@ class RunMe:
             f.write(json.dumps(args_dict))
 
         # Save all environment packages to logs_folder
-        environment_yml = os.path.join(log_folder, 'environment.yml')
-        subprocess.call('conda env export > {}'.format(environment_yml), shell=True)
+        if 'CONDA_DEFAULT_ENV' in os.environ:
+            environment_yml = os.path.join(log_folder, 'environment.yml')\
+                .replace('[', '\[')\
+                .replace(']', '\]')\
+                .replace("'", "\\'")
+            current_environment = os.environ['CONDA_DEFAULT_ENV']
+            subprocess.call(f'conda env export -n {current_environment} -f {environment_yml} --no-builds', shell=True)
+        else:
+            logging.info('Could not export environment file (probably you run it with an IDE).')
 
         if wandb_project is not None and not wandb_sweep:
             import wandb
@@ -765,9 +774,9 @@ class RunMe:
             None
         """
         # All file extensions to be saved by copy-code.
-        FILE_TYPES = ['.sh', '.py']
+        FILE_TYPES = ['.sh', '.py', '.yml', '.json', '.md', '.ipynb']
 
-        # Get DeepDIVA root
+        # Get Gale root
         cwd = os.getcwd()
         gale_root = os.path.join(cwd.split('gale')[0], 'gale')
 
@@ -787,6 +796,7 @@ class RunMe:
         # TODO: make it save a zipfile instead of a tarfile.
         with tarfile.open(os.path.join(output_folder, 'Gale.tar.gz'), 'w:gz') as tar:
             tar.add(tmp_dir, arcname='Gale')
+
 
         # Clean up all temporary files
         shutil.rmtree(tmp_dir)

@@ -18,7 +18,6 @@ class ImageClassification(BaseRunner):
         """
         super().__init__()
         self.setup = ImageClassificationSetup()
-
     ####################################################################################################################
     def prepare(self, init=False, **kwargs) -> dict:
         """See parent method for documentation

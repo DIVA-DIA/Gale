@@ -255,6 +255,7 @@ class BaseSetup:
 
     ################################################################################################
     # Analytics handling
+
     @classmethod
     def create_analytics_csv(cls, input_folder, darwin_dataset, train_ds, **kwargs):
         """
@@ -627,6 +628,7 @@ class BaseSetup:
             checkpoint_all_epochs=False,
             run=None,
             **kwargs):
+
         """Saves the current training checkpoint and the best valued checkpoint to file.
 
         Parameters
@@ -669,6 +671,7 @@ class BaseSetup:
         # If enabled, save all checkpoints with epoch number.
         if checkpoint_all_epochs:
             shutil.move(filename, os.path.join(log_dir, f'checkpoint_{epoch}{multi_run_label}.pth.tar'))
+
         return best_value
 
     @classmethod

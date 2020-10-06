@@ -14,10 +14,11 @@ RUN echo 'export PATH=/opt/conda/bin:$PATH' > /etc/profile.d/conda.sh && \
 ENV PATH /opt/conda/bin:$PATH
 ENV PYTHONPATH /gale:$PYTHONPATH
 
-#Create gale conda environment (like cd gale)
+# Create gale conda environment (like cd gale)
 WORKDIR /gale
 ADD environment.yml .
 RUN conda env create -f environment.yml && conda clean -a -y
+RUN conda init bash
 
 # Add the path of the python interpreter (like source activate gale)
 ENV PATH /opt/conda/envs/gale/bin/:$PATH
