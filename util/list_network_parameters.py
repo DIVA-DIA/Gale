@@ -1,17 +1,8 @@
-"""
- Created by Narayan Schuetz at 10/01/2019
- University of Bern
- 
- This file is subject to the terms and conditions defined in
- file 'LICENSE.txt', which is part of this source code package.
-"""
-
+import models
+import warnings
 import argparse
 import re
 import traceback
-import warnings
-
-import models
 
 
 def list_all_model_parameters():
@@ -34,7 +25,8 @@ def _print_model_parameters(model):
             print(model.__class__.__name__)
             print('Number of trainable model parameters: %d'
                   % sum(p.numel() for p in model.parameters() if p.requires_grad))
-            print('Number of total model parameters: %d\n' % sum(p.numel() for p in model.parameters()))
+            print('Number of total model parameters: %d\n' % sum(
+                p.numel() for p in model.parameters()))
         except:
             warnings.warn("Couldn't access parameters of callable %s due to the following error:" %
                           model.__class__.__name__)
@@ -67,3 +59,4 @@ if __name__ == "__main__":
     else:
         print("Invalid CL arguments")
         parser.print_help()
+

@@ -2,10 +2,11 @@
 Here are defined the different versions of advanced initialization techniques.
 """
 import datetime
+import time
 import logging
 import math
 import sys
-import time
+from itertools import count
 
 import numpy as np
 import torch
@@ -17,6 +18,7 @@ from init.util import lda, pca
 from template.runner.base.base_routine import BaseRoutine
 from template.runner.base.base_setup import BaseSetup
 from util.TB_writer import TBWriter
+from util.metric_logger import MetricLogger
 
 
 def minibatches_to_matrix(A):
@@ -38,7 +40,6 @@ def minibatches_to_matrix(A):
     if A.shape[1] == 1:
         A = np.squeeze(A)
     return A
-
 
 def _normalize_weights(w, b):
     """
@@ -165,7 +166,7 @@ def _fit_weights_size(w, module):
         # Get default values (the existing ones) from the network
         default_values = module.weight.data.cpu().numpy()
         if type(module) is nn.Conv2d:
-            default_values = _flatten_conv_filters(default_values)  # Brings it in the same shape as w
+            default_values = _flatten_conv_filters(default_values) # Brings it in the same shape as w
         else:
             default_values = default_values.T  # Linear Layers have neurons x input_dimensions
         assert len(default_values.shape) == len(w.shape)
@@ -180,7 +181,6 @@ def _fit_weights_size(w, module):
         w = w[:, :out_size]
 
     return w
-
 
 def _flatten_conv_filters(filters):
     """
@@ -295,26 +295,26 @@ def _filter_points_trimlda(init_input, init_labels, solver, iterations=5, **kwar
     clf = LinearDiscriminantAnalysis(solver=solver)
 
     # Initialize to full list
-    inputs = init_input
+    input = init_input
     labels = init_labels
 
-    for i in range(1, iterations + 1):
+    for i in range(1, iterations+1):
         logging.info('Filter points with trim-lda')
         start_time = time.time()
-        logging.info(f'\titeration {i} of {iterations} #samples={len(inputs)}')
-        clf.fit(X=inputs, y=labels)
+        logging.info(f'\titeration {i} of {iterations} #samples={len(input)}')
+        clf.fit(X=input, y=labels)
         # Predict on the FULL LIST
         predictions = clf.predict(init_input)
         # Keep the input data where it is CORRECTLY predicted
         locs = np.where(predictions == init_labels)
-        inputs = init_input[locs]
+        input = init_input[locs]
         labels = init_labels[locs]
         logging.info(
-            f'\tAcc={(len(inputs)) / len(init_input):.2f} '
+            f'\tAcc={(len(input)) / len(init_input):.2f} '
             f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}'
         )
 
-    return inputs, labels
+    return input, labels
 
 
 def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_standardize, trim_lda, **kwargs):
@@ -355,101 +355,105 @@ def _lda_discriminants(init_input, init_labels, lin_normalize, lin_scale, lin_st
     return _adapt_magnitude(w=W, b=B, normalize=lin_normalize, standardize=lin_standardize, scale=lin_scale)
 
 
-def _retrain_classifier(
+def _initialize_classifier(
+        *,
         module,
         init_input,
         init_labels,
-        retrain_lr,
-        retrain_wd,
-        retrain_epochs,
+        retrain,
+        retrain_normalize,
+        retrain_standardize,
+        retrain_scale,
         **kwargs):
-    # # Create classifier and init it with LDA
-    # classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
-    # classifier = classifier.cuda()
-    # # Measure initial accuracy
-    # acc = 0
-    # for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
-    #     input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
-    #     output = classifier(input)
-    #     acc += accuracy(output.data, target.data, topk=(1,))[0]
-    # acc /= i
-    # print(f'FROM SCRATCH')
-    # print(f'\t\t[-1] {acc.data.cpu().numpy()}')
-    # # Further train it
-    # optimizer = BaseSetup().get_optimizer(model=classifier, **kwargs)
-    # optimizer = optim.Adam(classifier.parameters(), lr=0.01)
-    # criterion = BaseSetup().get_criterion(**kwargs)
-    # PATIENCE_INIT = 10
-    # patience = PATIENCE_INIT
-    # best_acc = 0
-    # lr = kwargs['lr']
-    # for e in count(1):
-    #     if lr < 0.00001:
-    #         print(f"LR is now {lr} -> Exiting!")
-    #         break
-    #     acc = 0
-    #     for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
-    #         input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
-    #         optimizer.zero_grad()
-    #         output = classifier(input)
-    #         loss = criterion(output, target)
-    #         loss.backward()
-    #         optimizer.step()
-    #         acc += accuracy(output.data, target.data, topk=(1,))[0]
-    #     acc /= i
-    #     acc = acc.data.cpu().numpy()
-    #     print(f'\t[{e}] {acc}')
-    #     if acc > best_acc:
-    #         best_acc = acc
-    #         patience = PATIENCE_INIT
-    #     else:
-    #         patience -= 1
-    #
-    #     if patience == 0:
-    #         patience = PATIENCE_INIT
-    #         lr /= 10
-    #         for param_group in optimizer.param_groups:
-    #             param_group['lr'] = lr
-    #         print(f"LR decayed to {lr}")
-    # print(f'\t[BEST] {best_acc}')
+    """ Initialize the classifier layer with LDA and if specified further train it with XE
 
+    Parameters
+    ----------
+    module : torch.nn.Module
+        The module in which we'll put the weights
+    retrain : bool
+        Flag for retraining the classifier
+    retrain_normalize : bool
+    retrain_standardize : bool
+    retrain_scale : bool
+        Flags for adapting the magnitude of the weights of linear layer after retraining
+
+    Returns
+    -------
+    w : ndarray2d
+        Weight matrix to compute LDA discriminants
+    b : ndarray2d
+        Bias array relative to W
+    """
     # Compute LDA discriminants
-    w, b = _lda_discriminants(init_input, init_labels, **kwargs)
-    # Create classifier and init it with LDA
-    classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
-    classifier.weight.data.copy_(torch.from_numpy(w))
-    classifier.bias.data.copy_(torch.from_numpy(b))
-    classifier = classifier.cuda()
+    W, B = _lda_discriminants(init_input, init_labels, **kwargs)
+
+    # If requested, further train the classifier with LDA
+    if retrain:
+        # Create classifier
+        classifier = nn.Linear(in_features=module.weight.shape[1], out_features=module.weight.shape[0])
+        # Init it with the LDA numbers
+        classifier.weight.data.copy_(torch.from_numpy(W))
+        classifier.bias.data.copy_(torch.from_numpy(B))
+        classifier = classifier.cuda()
+        # Further train it
+        _train_classifier(classifier=classifier, init_input=init_input, init_labels=init_labels, **kwargs)
+        # Copy the final weights and adapt their magnitude
+        W = classifier.weight.data.cpu().numpy()
+        B = classifier.bias.data.cpu().numpy()
+        W, B = _adapt_magnitude(w=W, b=B, normalize=retrain_normalize, standardize=retrain_standardize, scale=retrain_scale)
+    return torch.from_numpy(W), torch.from_numpy(B)
+
+
+def _train_classifier(classifier, init_input, init_labels, retrain_epochs, retrain_lr, retrain_wd, **kwargs):
+    """ Train the classifier passed as parameters with XE
+
+    Parameters
+    ----------
+    classifier : torch.nn.Module
+        The classifier  to train
+    init_input : list(FloatTensor)
+        Input samples structured in batches
+    init_labels : list(FloatTensor)
+        Input labels structured in batches
+    retrain_lr : float
+        Learning rate for the last layer
+    retrain_wd : float
+        Weight decay for the last layer
+    retrain_epochs : int 
+        Number of epochs for the last layer
+
+    Returns
+    -------
+    w : ndarray2d
+        Weight matrix to compute LDA discriminants
+    b : ndarray2d
+        Bias array relative to W
+    """
     # Measure initial accuracy
     acc = 0
-    for i, (input_batch, target) in enumerate(zip(init_input, init_labels), 0):
-        input_batch, target = BaseRoutine.move_to_device(input_batch=input_batch, target=target, **kwargs)
-        output = classifier(input_batch)
+    for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
+        input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
+        output = classifier(input)
         acc += accuracy(output.data, target.data, topk=(1,))[0]
     acc /= i
     lda_accuracy = acc.data.cpu().numpy()
     print(f'\t[-1] {lda_accuracy}')
-
     # Further train it
-    kwargs['lr'] = 0.01
-    lr = kwargs['lr']
-    # optimizer = BaseSetup().get_optimizer(model=classifier, **kwargs)
     optimizer = optim.SGD(classifier.parameters(), lr=retrain_lr, weight_decay=retrain_wd, momentum=0.9, nesterov=True)
     criterion = BaseSetup().get_criterion(**kwargs)
-    PATIENCE_INIT = 20
-    patience = PATIENCE_INIT
-    best_acc = 0
 
+    best_acc = 0
     # for e in count(1):
     for e in range(retrain_epochs):
         # if lr < 0.0001:
         #     print(f"LR is now {lr} -> Exiting!")
         #     break
         acc = 0
-        for i, (input_batch, target) in enumerate(zip(init_input, init_labels), 0):
-            input_batch, target = BaseRoutine.move_to_device(input_batch=input_batch, target=target, **kwargs)
+        for i, (input, target) in enumerate(zip(init_input, init_labels), 0):
+            input, target = BaseRoutine.move_to_device(input=input, target=target, **kwargs)
             optimizer.zero_grad()
-            output = classifier(input_batch)
+            output = classifier(input)
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
@@ -460,26 +464,50 @@ def _retrain_classifier(
         TBWriter().add_scalar(tag='init_lda_accuracy', scalar_value=lda_accuracy, global_step=e)
         TBWriter().add_scalar(tag='init_retrain', scalar_value=acc, global_step=e)
 
-        if acc > best_acc + 0.1:
-            best_acc = acc
-            patience = PATIENCE_INIT
-        else:
-            patience -= 1
-
-        if patience == 0:
-            patience = PATIENCE_INIT
-            lr /= 10
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
-            print(f"LR decayed to {lr}")
     print(f'\t[BEST] {best_acc}')
     TBWriter().add_scalar(tag='init_best_acc', scalar_value=best_acc)
-    # Copy the final weights and adapt their magnitude
-    W = classifier.weight.data.cpu().numpy()
-    B = classifier.bias.data.cpu().numpy()
-    W, B = _adapt_magnitude(w=W, b=B, normalize=True, standardize=True, scale=False)
-    return W, B
 
+
+
+
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+#######################################################################################################################
+def orthogonal(
+        module,
+        **kwargs
+):
+    """
+    Initialize the layer with orthonormal matrices lt values from:
+    https://github.com/ducha-aiki/LSUV-pytorch/blob/master/LSUV.py
+
+   Orthogonal init code is taken (and adapted) from:
+   Lasagne https://github.com/Lasagne/Lasagne/blob/master/lasagne/init.py
+
+    Parameters
+    ----------
+    model : torch.nn.parallel.data_parallel.DataParallel
+        The actual model we're initializing. It is used to infer the depth and possibly other information
+
+    Returns
+    -------
+    w : torch.Tensor
+        Weight matrix
+    b : torch.Tensor
+        Bias array
+    """
+    shape = module.weight.data.shape
+    flat_shape = shape[0], np.prod(shape[1:])
+    a = np.random.normal(0.0, 1.0, flat_shape)#w;
+    u, _, v = np.linalg.svd(a, full_matrices=False)
+    # pick the one with the correct shape
+    q = u if u.shape == flat_shape else v
+
+    W = q.reshape(shape)
+    B = np.zeros(module.weight.shape[0])
+
+    return torch.from_numpy(W), torch.from_numpy(B)
 
 #######################################################################################################################
 #######################################################################################################################
@@ -516,11 +544,9 @@ def random(
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
-def randisco(
-        layer_index,
+def randisco(        
         init_input,
-        init_labels,
-        model,
+        init_labels,        
         module,
         **kwargs
 ):
@@ -532,16 +558,12 @@ def randisco(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
 
@@ -552,21 +574,15 @@ def randisco(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         # Init W and B with the default values
         W = module.weight.data.cpu().numpy()
         B = module.bias.data.cpu().numpy() if module.bias is not None else np.zeros(module.weight.shape[0])
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -574,10 +590,8 @@ def randisco(
 #######################################################################################################################
 #######################################################################################################################
 def pure_lda(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -588,16 +602,12 @@ def pure_lda(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -612,23 +622,17 @@ def pure_lda(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         logging.info('Pure LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -636,10 +640,8 @@ def pure_lda(
 #######################################################################################################################
 #######################################################################################################################
 def mirror_lda(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -651,16 +653,12 @@ def mirror_lda(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -675,11 +673,7 @@ def mirror_lda(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         logging.info('Mirror LDA Transform')
         W, B = lda.transform(X=init_input, y=init_labels, **kwargs)
         # Compute available columns
@@ -692,13 +686,11 @@ def mirror_lda(
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -706,10 +698,8 @@ def mirror_lda(
 #######################################################################################################################
 #######################################################################################################################
 def highlander_lda(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -723,16 +713,12 @@ def highlander_lda(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -747,11 +733,7 @@ def highlander_lda(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         logging.info('Highlander LDA Transform')
         classes = np.unique(init_labels)
 
@@ -789,13 +771,11 @@ def highlander_lda(
         # Adapt the size of the weights
         # W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -803,10 +783,7 @@ def highlander_lda(
 #######################################################################################################################
 #######################################################################################################################
 def pure_pca(
-        layer_index,
         init_input,
-        init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -817,16 +794,10 @@ def pure_pca(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
-    init_labels :  ndarray 2d
-        Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -841,36 +812,28 @@ def pure_pca(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         logging.info('PCA Transform')
         W, B = pca.transform(init_input)
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
+    if type(module) is nn.Linear:
         # Init W and B with the default values
         W = module.weight.data.cpu().numpy()
         B = module.bias.data.cpu().numpy()
-
-    return torch.from_numpy(W), torch.from_numpy(B)
-
+        return torch.from_numpy(W), torch.from_numpy(B)
 
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
 #######################################################################################################################
 def pcdisc(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -881,16 +844,12 @@ def pcdisc(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -905,23 +864,17 @@ def pcdisc(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         logging.info('PCA Transform')
         W, B = pca.transform(init_input)
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -929,10 +882,8 @@ def pcdisc(
 #######################################################################################################################
 #######################################################################################################################
 def lpca(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -943,16 +894,12 @@ def lpca(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -967,11 +914,7 @@ def lpca(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         logging.info('LDA Transform')
         w, b = lda.transform(X=init_input, y=init_labels, **kwargs)
         w, B = _adapt_magnitude(w=w, b=b, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
@@ -980,7 +923,7 @@ def lpca(
         p, c = _adapt_magnitude(w=p, b=c, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
 
         # Compute available columns
-        half_available_columns = int(module.weight.shape[0] / 2)
+        half_available_columns = int(module.weight.shape[0]/2)
         if module.weight.shape[0] % 2 != 0:
             logging.info(
                 f"Not all columns will be initialized as the shape {module.weight.shape[0]} is not divisible by 2"
@@ -994,16 +937,13 @@ def lpca(
         end_index_first_part = np.min([half_available_columns, w.shape[1]])
         W[:, 0:end_index_first_part] = w[:, 0:end_index_first_part]
         # Add PCA columns in the second part
-        W[:, end_index_first_part:] = p[:, 0:W.shape[1] - end_index_first_part]
-
+        W[:, end_index_first_part:] = p[:, 0:W.shape[1]-end_index_first_part]
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -1011,10 +951,8 @@ def lpca(
 #######################################################################################################################
 #######################################################################################################################
 def reverse_pca(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -1029,16 +967,12 @@ def reverse_pca(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -1053,11 +987,7 @@ def reverse_pca(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
 
         # Check if size of model allows (has enough neurons)
         if module.weight.shape[0] < len(np.unique(init_labels)) * 2:
@@ -1092,13 +1022,11 @@ def reverse_pca(
         # Adapt the size of the weights
         W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -1106,10 +1034,8 @@ def reverse_pca(
 #######################################################################################################################
 #######################################################################################################################
 def relda(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -1127,16 +1053,12 @@ def relda(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -1157,15 +1079,8 @@ def relda(
     CINIC10 , InitBaseline:
 
         SOLVER=EIGEN always fails!
-
-
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
-
+    if type(module) is nn.Conv2d:
         classes = np.unique(init_labels)
 
         # Check if size of model allows (has enough neurons)
@@ -1189,7 +1104,7 @@ def relda(
         clf = LinearDiscriminantAnalysis(solver=kwargs['solver'])
         initial_size = len(init_input)
         for i in range(N):
-            logging.info(f'Iteration {i + 1} of {N} #samples={len(init_input)}')
+            logging.info(f'Iteration {i+1} of {N} #samples={len(init_input)}')
             if len(init_input) < 1:
                 logging.info('No more wrong samples -> exiting loop')
                 break
@@ -1207,7 +1122,7 @@ def relda(
             logging.info(f'\tpredicting...')
             predictions = clf.predict(init_input)
             locs = np.where(predictions != init_labels)
-            logging.info(f'\tcurrent acc={1 - float(len(locs[0])) / len(init_input):.2f} ...')
+            logging.info(f'\tcurrent acc={1 - float(len(locs[0]))/len(init_input):.2f} ...')
             init_input = init_input[locs]
             init_labels = init_labels[locs]
             logging.info(f'\tglobal integrated acc={(initial_size - len(init_input)) / initial_size:.2f} ...')
@@ -1229,13 +1144,11 @@ def relda(
         # TODO done above, what is better?
         # W, B = _adapt_magnitude(w=W, b=B, normalize=conv_normalize, standardize=conv_standardize, scale=conv_scale)
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
-
-    return torch.from_numpy(W), torch.from_numpy(B)
+    if type(module) is nn.Linear:
+        return  _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
 
 #######################################################################################################################
@@ -1243,10 +1156,8 @@ def relda(
 #######################################################################################################################
 #######################################################################################################################
 def greedya(
-        layer_index,
         init_input,
         init_labels,
-        model,
         module,
         conv_normalize,
         conv_standardize,
@@ -1258,16 +1169,12 @@ def greedya(
 
     Parameters
     ----------
-    layer_index : int
-        The layer being initialized. Ranges from 1 to network_depth
     init_input : ndarray 2d
         Input data, either from images or feature space. Format is 2D: [data_size x dimensionality]
         data_size can be computed as (num_samples * patches_x_image), whereas dimensionality is typically
         (in_channels * kernel_size * kernel_size)
     init_labels :  ndarray 2d
         Labels corresponding to the input data. The size is same as `init_input`
-    model : torch.nn.parallel.data_parallel.DataParallel
-        The actual model we're initializing. It is used to infer the depth and possibly other information
     module : torch.nn.Module
         The module in which we'll put the weights
     conv_normalize : bool
@@ -1282,11 +1189,7 @@ def greedya(
     b : torch.Tensor
         Bias array
     """
-    network_depth = len(list(list(model.children())[0].children()))
-
-    ##################################################################
-    # All layers but the last one
-    if layer_index < network_depth:
+    if type(module) is nn.Conv2d:
         logging.info('Greedya Transform')
         classes = np.unique(init_labels)
 
@@ -1298,8 +1201,8 @@ def greedya(
             sys.exit(-1)
 
         # Init W with the default values
-        # W = _flatten_conv_filters(module.weight.data.cpu().numpy())
-        W = np.zeros_like(_flatten_conv_filters(module.weight.data.cpu().numpy()))
+        W = _flatten_conv_filters(module.weight.data.cpu().numpy())
+        # W = np.zeros_like(_flatten_conv_filters(module.weight.data.cpu().numpy()))
         start_index = 0
 
         # ----------------------------------------------------------------------------------------------
@@ -1386,10 +1289,11 @@ def greedya(
 
         # Adapt the size of the weights
         W, B = _basic_conv_procedure(W, B, module, **kwargs)
+        return torch.from_numpy(W), torch.from_numpy(B)
 
     ##################################################################
-    # Last layer
-    else:
-        W, B = _retrain_classifier(module, init_input, init_labels, **kwargs)
+    if type(module) is nn.Linear:
+        return _initialize_classifier(module=module, init_input=init_input, init_labels=init_labels, **kwargs)
 
-    return torch.from_numpy(W), torch.from_numpy(B)
+
+

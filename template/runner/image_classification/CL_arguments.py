@@ -3,7 +3,6 @@ import argparse
 from init import advanced_init
 from template.runner.base import BaseCLArguments
 
-
 class CLArguments(BaseCLArguments):
 
     def __init__(self):
@@ -20,37 +19,45 @@ class CLArguments(BaseCLArguments):
         if args.split_type is None:
             args.split_type = "stratified_tag"
 
-        # Inject wisdom for default parameters based on the init function
-        init_function = args.init_function
-        if init_function == "randisco":  # x x x 1 1 0
-            args.lin_normalize = 1
-            args.lin_standardize = 1
+        # IF LSUV IS OFF > Inject wisdom for default parameters based on the init function
+        if args.lsuv == 0:
+            init_function = args.init_function
+            if init_function == "randisco":    # x x x - 0 0 0 - 0 1 0  (lin 110 if no retrain)
+                args.retrain_standardize = 1
 
-        if init_function is "pure_lda":  # 0 1 1 1 0 0
-            args.conv_standardize = 1
-            args.conv_scale = 1
-            args.lin_normalize = 1
+            if init_function is "pure_lda":    # 0 1 1 - 1 0 0
+                args.conv_standardize = 1
+                args.conv_scale = 1
+                args.lin_normalize = 1
+                args.retrain_standardize = 1
 
-        if init_function == "pure_pca":  # 1 1 1 x x x
-            args.conv_normalize = 1
-            args.conv_standardize = 1
-            args.conv_scale = 1
+            if init_function == "pure_pca":    # 1 1 1 - x x x
+                args.conv_normalize = 1
+                args.conv_standardize = 1
+                args.conv_scale = 1
+                args.retrain_standardize = 1
 
-        if init_function == "pcdisc":  # 1 1 1 1 1 1
-            args.conv_normalize = 1
-            args.conv_standardize = 1
-            args.conv_scale = 1
-            args.lin_normalize = 1
-            args.lin_standardize = 1
-            args.lin_scale = 1
+            if init_function == "pcdisc":      # 1 1 1 - 1 1 1
+                args.conv_normalize = 1
+                args.conv_standardize = 1
+                args.conv_scale = 1
+                args.lin_normalize = 1
+                args.lin_standardize = 1
+                args.lin_scale = 1
+                args.retrain_standardize = 1
 
-        if init_function == "lpca":  # 0 0 1 1 0 0
-            args.conv_scale = 1
-            args.lin_normalize = 1
+            if init_function == "lpca":        # 0 0 1 - 1 0 0
+                args.conv_scale = 1
+                args.lin_normalize = 1
 
-        if init_function == "sbgatto":
-            args.conv_standardize = 1
-            args.conv_scale = 1
+            if init_function == "greedya":      # 1 1 1 - 1 1 1
+                args.conv_normalize = 1
+                args.conv_standardize = 1
+                args.conv_scale = 1
+                args.lin_normalize = 1
+                args.lin_standardize = 1
+                args.lin_scale = 1
+                args.retrain_standardize = 1
 
         return args, self.parser
 
@@ -87,6 +94,7 @@ class CLArguments(BaseCLArguments):
                                       type=float,
                                       help="If present, specifies the random rotation degrees", )
 
+
     def _init_options(self):
         """
         Options specific for network initialization methods
@@ -121,6 +129,11 @@ class CLArguments(BaseCLArguments):
                                  help='Which activation function to use in the model for non-linearity')
 
         # Flags for normalizations
+        parser_init.add_argument("--lsuv",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for using LSUV for scaling weights")
+
         parser_init.add_argument("--conv-normalize",
                                  type=int,
                                  default=0,
@@ -147,6 +160,19 @@ class CLArguments(BaseCLArguments):
                                  default=0,
                                  help="Flag for normalizing linear weights")
 
+        parser_init.add_argument("--retrain-normalize",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for normalizing retrain weights")
+        parser_init.add_argument("--retrain-standardize",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for standardizing retrain weights")
+        parser_init.add_argument("--retrain-scale",
+                                 type=int,
+                                 default=0,
+                                 help="Flag for normalizing retrain weights")
+
         parser_init.add_argument("--trim-lda",
                                  type=self.str2bool,
                                  default="True",
@@ -156,6 +182,19 @@ class CLArguments(BaseCLArguments):
                                  default=0,
                                  help='ratio of noise to be added on the conv weights')
 
-        parser_init.add_argument('--retrain-wd', type=float)
-        parser_init.add_argument('--retrain-lr', type=float)
-        parser_init.add_argument('--retrain-epochs', type=int)
+        parser_init.add_argument("--retrain",
+                                 type=self.str2bool,
+                                 default="False",
+                                 help="Flag for retraining the classifier")
+        parser_init.add_argument('--retrain-wd',
+                                 type=float,
+                                 default=0.001,
+                                 help="Weight decay for the last layer")
+        parser_init.add_argument('--retrain-lr',
+                                 type=float,
+                                 default=0.01,
+                                 help="Learning rate for the last layer")
+        parser_init.add_argument('--retrain-epochs',
+                                 type=int,
+                                 default=20,
+                                 help="Number of epochs for the last layer")

@@ -72,7 +72,7 @@ def mnist(args):
     split_dataset(dataset_folder=dataset_root, split=0.2, symbolic=False)
 
 
-def svhn(args):
+def svhn(output_folder, **kwargs):
     """
     Fetches and prepares (in a DeepDIVA friendly format) the SVHN dataset to the location specified
     on the file system
@@ -90,24 +90,24 @@ def svhn(args):
     from scipy.io import loadmat as _loadmat
 
     # Use torchvision to download the dataset
-    torchvision.datasets.SVHN(root=args.output_folder, split='train', download=True)
-    torchvision.datasets.SVHN(root=args.output_folder, split='test', download=True)
+    torchvision.datasets.SVHN(root=output_folder, split='train', download=True)
+    torchvision.datasets.SVHN(root=output_folder, split='test', download=True)
 
     # Load the data into memory
-    train = _loadmat(os.path.join(args.output_folder,
+    train = _loadmat(os.path.join(output_folder,
                                   'train_32x32.mat'))
     train_data, train_labels = train['X'], train['y'].astype(np.int64).squeeze()
     np.place(train_labels, train_labels == 10, 0)
     train_data = np.transpose(train_data, (3, 0, 1, 2))
 
-    test = _loadmat(os.path.join(args.output_folder,
+    test = _loadmat(os.path.join(output_folder,
                                  'test_32x32.mat'))
     test_data, test_labels = test['X'], test['y'].astype(np.int64).squeeze()
     np.place(test_labels, test_labels == 10, 0)
     test_data = np.transpose(test_data, (3, 0, 1, 2))
 
     # Make output folders
-    dataset_root = os.path.join(args.output_folder, 'SVHN')
+    dataset_root = os.path.join(output_folder, 'SVHN')
     train_folder = os.path.join(dataset_root, 'train')
     test_folder = os.path.join(dataset_root, 'test')
 
@@ -125,8 +125,8 @@ def svhn(args):
     _write_data_to_folder(train_data, train_labels, train_folder)
     _write_data_to_folder(test_data, test_labels, test_folder)
 
-    os.remove(os.path.join(args.output_folder, 'train_32x32.mat'))
-    os.remove(os.path.join(args.output_folder, 'test_32x32.mat'))
+    os.remove(os.path.join(output_folder, 'train_32x32.mat'))
+    os.remove(os.path.join(output_folder, 'test_32x32.mat'))
 
     split_dataset(dataset_folder=dataset_root, split=0.2, symbolic=False)
 

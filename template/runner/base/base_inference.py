@@ -127,7 +127,7 @@ class BaseInference(AbstractRunner):
             img = convert_to_rgb(img)
 
         # Transform it
-        img = self.transform(img)
+        img, _ = self.transform(img, None)
         # Move it to the correct device
         img, _ = BaseRoutine.move_to_device(input_batch=img, **kwargs)
         # Fake a mini-batch of size 1

@@ -28,7 +28,6 @@ import colorlog
 import numpy as np
 # Torch related stuff
 import torch
-
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # SigOpt
@@ -40,7 +39,6 @@ from util.TB_writer import TBWriter
 from util.misc import get_all_files_in_folders_and_subfolders
 from util.misc import to_capital_camel_case
 from visualization.mean_std_plot import plot_mean_std
-
 
 ########################################################################################################################
 
@@ -93,7 +91,7 @@ class RunMe:
                 del sweep_parameters['_wandb']
                 for k, v in sweep_parameters.items():
                     # Update with parameters from the wandb.config s.t. we get the parameters from the sweep
-                    args.update({k: v})
+                    args.update({k:v})
                     # Append their key:value to the experiment name for clarity in the name on the Website
                     args['experiment_name'] += "_" + str(k) + ":" + str(v)
             # Provide all the parameters as configurations to Wandb
@@ -159,63 +157,72 @@ class RunMe:
             )
         # Authenticate to SigOpt
         conn = Connection(client_token=sigopt_token)
+
         # Running as many runs as necessary, stopping early is max budget is reached
-        for _ in count(1):
-            # Refresh experiment object
-            experiment = conn.experiments(sigopt_experiment_id).fetch()
+        # TODO this is voluntarily disabled to use with run_parallel.py which takes care of this
+        # for _ in count(1):
 
-            # It case the bandwidth is 1, currently open suggestions are dead runs so we remove them
-            if experiment.parallel_bandwidth == 1:
-                conn.experiments(experiment.id).suggestions().delete(state="open")
+        # Refresh experiment object
+        experiment = conn.experiments(sigopt_experiment_id).fetch()
 
-            # Check if budget has been met
-            if experiment.progress.observation_budget_consumed >= experiment.observation_budget:
-                print(
-                    f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
-                    f"{experiment.observation_budget}. Finished here :)"
-                )
-                return {}
+        # It case the bandwidth is 1, currently open suggestions are dead runs so we remove them
+        # TODO this is voluntarily disabled to use with run_parallel.py which takes care of this
+        # if experiment.parallel_bandwidth == 1:
+        #     conn.experiments(experiment.id).suggestions().delete(state="open")
 
-            # Get suggestion from SigOpt
-            suggestion = conn.experiments(experiment.id).suggestions().create()
-            params = suggestion.assignments
+        # Check if budget has been met
+        if experiment.progress.observation_count >= experiment.observation_budget:
+            print(
+                f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
+                f"{experiment.observation_budget}. Finished here :)"
+            )
+            return {}
 
-            # Override/inject CL arguments received from SigOpt
-            for key in params:
-                if key in kwargs and isinstance(kwargs[key], bool):
-                    params[key] = params[key].lower() in ['true']
-                kwargs[key.replace("-", "_")] = params[key]
+        # Get suggestion from SigOpt
+        suggestion = conn.experiments(experiment.id).suggestions().create()
+        params = suggestion.assignments
 
-            # Run
-            return_value = cls._execute(multi_run=multi_run, **kwargs)
-            val = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
+        # Override/inject CL arguments received from SigOpt
+        for key in params:
+            if key in kwargs and isinstance(kwargs[key], bool):
+                params[key] = params[key].lower() in ['true']
+            kwargs[key.replace("-", "_")] = params[key]
 
-            # Get indexes of highest values
-            indexes = np.argmax(val, axis=1)
-            # Select the highest values
-            scores = val[np.arange(val.shape[0]), indexes]
+        # Run
+        return_value = cls._execute(multi_run=multi_run, **kwargs)
+        val = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
 
-            # Compute the averaged value and std of the runs (if multi_run is None then is a single value)
-            values = [{
-                "name": "validation_accuracy",
-                "value": float(np.mean(scores)),
-                "value_stddev": float(np.std(scores)) if multi_run is not None else None
-            }]
+        # Get indexes of highest values
+        indexes = np.argmax(val, axis=1)
+        # Select the highest values
+        scores = val[np.arange(val.shape[0]), indexes]
 
-            # If enabled, get the best epoch value
-            if sigopt_best_epoch:
-                # Correct for epoch -1 being at the end of the array if necessary
-                indexes[indexes == val.shape[1]] = -1
-                values.append({
-                    "name": "best_epoch",
-                    "value": float(np.round(np.mean(indexes))),
-                    "value_stddev": float(np.std(indexes))
-                })
-                TBWriter().add_scalar(tag='test/best_epoch', scalar_value=float(np.round(np.mean(indexes))))
-                TBWriter().add_scalar(tag='test/best_epoch_std', scalar_value=float(np.std(indexes)))
+        # Compute the averaged value and std of the runs (if multi_run is None then is a single value)
+        values = [{
+            "name": "validation_accuracy",
+            "value": float(np.mean(scores)),
+            "value_stddev": float(np.std(scores)) if multi_run is not None else None
+        }]
+        # If test-set has errors (i.e. there is -1 in it) then invalidate the validation scores as well s.t SigOpt knows about it
+        test = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
+        if np.max(test) <= 0:
+            values[0]['value'] = -1
+            values[0]['value_stddev'] = 0
 
-            # Report the observation
-            conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, values=values)
+        # If enabled, get the best epoch value
+        if sigopt_best_epoch:
+            # Correct for epoch -1 being at the end of the array if necessary
+            indexes[indexes == val.shape[1]] = -1
+            values.append({
+                "name": "best_epoch",
+                "value": float(np.round(np.mean(indexes))),
+                "value_stddev": float(np.std(indexes))
+            })
+            TBWriter().add_scalar(tag='test/best_epoch', scalar_value=float(np.round(np.mean(indexes))))
+            TBWriter().add_scalar(tag='test/best_epoch_std', scalar_value=float(np.std(indexes)))
+
+        # Report the observation
+        conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, values=values)
         return {}
 
     @classmethod
@@ -274,14 +281,14 @@ class RunMe:
 
         # Create the metrics for the experiments
         metrics = [{
-            'name': "validation_accuracy",
-            'objective': "maximize",
-            'threshold': 0
+            'name' : "validation_accuracy",
+            'objective' : "maximize",
         }]
         if minimize_best_epoch:
+            metrics[0]['threshold'] = 0
             metrics.append({
-                'name': "best_epoch",
-                'objective': "minimize",
+                'name' : "best_epoch",
+                'objective' : "minimize",
             })
 
         # If specified, load the conditionals
@@ -328,7 +335,6 @@ class RunMe:
         return_value : dict
             Dictionary with the return value of the runner
         """
-
         def get_all_concrete_subclasses(class_name):
             csc = set()  # concrete subclasses
             if not inspect.isabstract(class_name):
@@ -340,8 +346,7 @@ class RunMe:
         # Set up logging
         # Don't use args.output_folder as that breaks when using SigOpt
         unpacked_args = {'ignoregit': ignoregit, 'runner_class': runner_class, 'multi_run': multi_run, 'quiet': quiet}
-        current_log_folder = cls._set_up_logging(parser=RunMe.parser, quiet=quiet,
-                                                 args_dict={**kwargs, **unpacked_args},
+        current_log_folder = cls._set_up_logging(parser=RunMe.parser, quiet=quiet, args_dict={**kwargs, **unpacked_args},
                                                  **kwargs)
 
         # Copy the code into the output folder
@@ -374,8 +379,7 @@ class RunMe:
             return_value = cls._multi_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
         else:
             try:
-                return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args,
-                                                         **kwargs)
+                return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
             except Exception as exp:
                 return_value = cls._log_failure(exp, **kwargs)
                 TBWriter().add_scalar(tag='test/accuracy', scalar_value=return_value['test'])
@@ -406,7 +410,6 @@ class RunMe:
         payload : dict
             Dictionary with the payload to return after inference
         """
-
         def get_all_concrete_subclasses(class_name):
             csc = set()  # concrete subclasses
             if not inspect.isabstract(class_name):
@@ -480,8 +483,7 @@ class RunMe:
             except Exception as exp:
                 return_value = cls._log_failure(exp, epochs)
 
-            train_all[i, :], val_all[i, :], test_all[i] = (
-            return_value['train'], return_value['val'], return_value['test'])
+            train_all[i, :], val_all[i, :], test_all[i] = (return_value['train'], return_value['val'], return_value['test'])
 
             # Generate and add to TB the shaded plot for train
             train_curve = plot_mean_std(arr=train_all[:i + 1],
@@ -538,7 +540,6 @@ class RunMe:
         parser : ArgumentParser
             Parser used to process the arguments
         """
-
         def get_runner_class_options() -> dict:
             """Get all the classes which extend from AbstractRunner, located in any of the runner packages"""
             rdir = os.path.join(os.path.dirname(__file__), 'runner')
@@ -576,7 +577,7 @@ class RunMe:
         else:
             # Multiple sub-classes found. Invalid situation. Abort
             print('Multiple sub-classes of BaseCLArguments found in package: {}.'
-                  'There must be only one. Exiting'.format('template.runner.' + runner_class))
+                  'There must be only one. Exiting'.format('template.runner.'+runner_class))
             raise SystemExit
         args, parser = cla().parse_arguments(args)
 
@@ -661,8 +662,7 @@ class RunMe:
         LOG_FILE = 'logs.txt'
 
         # Recover dataset name
-        dataset = os.path.basename(os.path.normpath(kwargs['input_folder'])) if kwargs[
-                                                                                    'input_folder'] is not None else ""
+        dataset = os.path.basename(os.path.normpath(kwargs['input_folder'])) if kwargs['input_folder'] is not None else ""
 
         """
         We extract the TRAIN parameters names (such as model_name, lr, ... ) from the parser directly.
@@ -769,17 +769,17 @@ class RunMe:
 
         # Get DeepDIVA root
         cwd = os.getcwd()
-        dd_root = os.path.join(cwd.split('Gale')[0], 'Gale')
+        gale_root = os.path.join(cwd.split('gale')[0], 'gale')
 
-        files = get_all_files_in_folders_and_subfolders(dd_root)
+        files = get_all_files_in_folders_and_subfolders(gale_root)
 
-        # Get all files types in DeepDIVA as specified in FILE_TYPES
+        # Get all files types in Gale as specified in FILE_TYPES
         code_files = [item for item in files if item.endswith(tuple(FILE_TYPES))]
 
         tmp_dir = tempfile.mkdtemp()
 
         for item in code_files:
-            dest = os.path.join(tmp_dir, 'Gale', item.split('Gale')[1][1:])
+            dest = os.path.join(tmp_dir, 'gale', item.split('gale')[1][1:])
             if not os.path.exists(os.path.dirname(dest)):
                 os.makedirs(os.path.dirname(dest))
             shutil.copy(item, dest)

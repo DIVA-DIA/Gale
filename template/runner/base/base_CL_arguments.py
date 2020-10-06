@@ -122,7 +122,7 @@ class BaseCLArguments:
                                    default=1,
                                    help='number of concurrent parallel optimization running.')
         parser_sigopt.add_argument('--sigopt-best-epoch',
-                                   default=True,
+                                   default=False,
                                    action='store_true',
                                    help='flag for optimizing the best epoch (how soon the max val accuracy is achieved)')
         parser_sigopt.add_argument('--sigopt-conditionals-file',
@@ -164,6 +164,10 @@ class BaseCLArguments:
                                    action='store_true',
                                    default=False,
                                    help='run on CPU')
+        parser_system.add_argument('--no-pin-memory',
+                                   action='store_true',
+                                   default=False,
+                                   help='disable the pin memory on GPU')
         parser_system.add_argument('--device',
                                    default='cuda',
                                    help='selects device')

@@ -100,17 +100,17 @@ class BabyResNet(nn.Module):
             nn.MaxPool2d(kernel_size=3, stride=1, padding=0),
         )
 
-        # Bulk part of the ResNet with four groups of blocks (expected size: 56x56x64)
+        # Bulk part of the ResNet with four groups of blocks (expected size: 28x28x128)
         self.conv3x = self._make_layer(block_type, 128, num_block[1])
         self.conv4x = self._make_layer(block_type, 256, num_block[2], stride=2)
         self.conv5x = self._make_layer(block_type, 512, num_block[3], stride=2)
 
         # Final averaging and fully connected layer for classification (expected size: 7x7x512*block_type.expansion)
-        self.avgpool = nn.AvgPool2d(kernel_size=7, stride=1)
-        self.fc = nn.Sequential(
+        self.avgpool = nn.Sequential(
+            nn.AvgPool2d(kernel_size=7, stride=1),
             Flatten(),
-            nn.Linear(512 * block_type.expansion, num_classes),
         )
+        self.fc = nn.Linear(512 * block_type.expansion, num_classes)
 
         # Initialize the weights of all layers
         for m in self.modules():
@@ -182,7 +182,7 @@ class BabyResNet(nn.Module):
         x = self.conv5x(x)
 
         x = self.avgpool(x)
-        self.features = x
+        # self.features = x # Currently disabled because avgpool flattens them for working with --init
         x = self.fc(x)
         return x
 

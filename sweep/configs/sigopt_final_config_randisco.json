@@ -12,21 +12,6 @@
         "bounds": {"max": 0.03, "min": 0.0003}
     },
     {
-        "name": "conv-normalize",
-        "type": "int",
-        "bounds": {"max": 1, "min": 0}
-    },
-    {
-        "name": "conv-standardize",
-        "type": "int",
-        "bounds": {"max": 1, "min": 0}
-    },
-    {
-        "name": "conv-scale",
-        "type": "int",
-        "bounds": {"max": 1, "min": 0}
-    },
-    {
         "name": "lin-normalize",
         "type": "int",
         "bounds": {"max": 1, "min": 0}
