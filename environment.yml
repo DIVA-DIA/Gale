@@ -57,7 +57,6 @@ dependencies:
   - pytz=2019.3=py_0
   - qt=5.9.7=h5867ecd_1
   - readline=7.0=h7b6447c_5
-  - scikit-learn=0.22.1=py37hd81dba3_0
   - scipy=1.4.1=py37h0b6359f_0
   - seaborn=0.10.0=py_0
   - setuptools=45.2.0=py37_0
@@ -101,7 +100,6 @@ dependencies:
       - shortuuid==0.5.0
       - sigopt==5.3.1
       - smmap2==2.0.5
-      - spectral==0.988
       - subprocess32==3.5.4
       - tensorboardx==2.0
       - text-unidecode==1.3
