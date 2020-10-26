@@ -3,6 +3,7 @@ import argparse
 from init import advanced_init
 from template.runner.base import BaseCLArguments
 
+
 class CLArguments(BaseCLArguments):
 
     def __init__(self):
@@ -22,22 +23,22 @@ class CLArguments(BaseCLArguments):
         # IF LSUV IS OFF > Inject wisdom for default parameters based on the init function
         if args.lsuv == 0:
             init_function = args.init_function
-            if init_function == "randisco":    # x x x - 0 0 0 - 0 1 0  (lin 110 if no retrain)
+            if init_function == "randisco":  # x x x - 0 0 0 - 0 1 0  (lin 110 if no retrain)
                 args.retrain_standardize = 1
 
-            if init_function is "pure_lda":    # 0 1 1 - 1 0 0
+            if init_function is "pure_lda":  # 0 1 1 - 1 0 0
                 args.conv_standardize = 1
                 args.conv_scale = 1
                 args.lin_normalize = 1
                 args.retrain_standardize = 1
 
-            if init_function == "pure_pca":    # 1 1 1 - x x x
+            if init_function == "pure_pca":  # 1 1 1 - x x x
                 args.conv_normalize = 1
                 args.conv_standardize = 1
                 args.conv_scale = 1
                 args.retrain_standardize = 1
 
-            if init_function == "pcdisc":      # 1 1 1 - 1 1 1
+            if init_function == "pcdisc":  # 1 1 1 - 1 1 1
                 args.conv_normalize = 1
                 args.conv_standardize = 1
                 args.conv_scale = 1
@@ -46,11 +47,11 @@ class CLArguments(BaseCLArguments):
                 args.lin_scale = 1
                 args.retrain_standardize = 1
 
-            if init_function == "lpca":        # 0 0 1 - 1 0 0
+            if init_function == "lpca":  # 0 0 1 - 1 0 0
                 args.conv_scale = 1
                 args.lin_normalize = 1
 
-            if init_function == "greedya":      # 1 1 1 - 1 1 1
+            if init_function == "greedya":  # 1 1 1 - 1 1 1
                 args.conv_normalize = 1
                 args.conv_standardize = 1
                 args.conv_scale = 1
@@ -94,14 +95,15 @@ class CLArguments(BaseCLArguments):
                                       type=float,
                                       help="If present, specifies the random rotation degrees", )
 
-
     def _init_options(self):
         """
         Options specific for network initialization methods
         """
         init_options = [name for name in advanced_init.__dict__ if callable(advanced_init.__dict__[name])]
 
-        parser_init = self.parser.add_argument_group('INIT', 'Init Options')
+        parser_init = self.parser.add_argument_group('INIT',
+                                                     'Init Options (needs environment extension '
+                                                     '[extend_environment_initialisation.sh])')
 
         parser_init.add_argument('--init',
                                  action='store_true',
