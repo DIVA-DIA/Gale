@@ -1,6 +1,5 @@
 import torch.nn as nn
 from spectral import DctII2d, iDctII2d, Dft2d, iDft2d
-from models.registry import Model
 
 
 # ----------------------------------------------------------------------------------------------------------------------

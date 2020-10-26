@@ -101,9 +101,7 @@ class CLArguments(BaseCLArguments):
         """
         init_options = [name for name in advanced_init.__dict__ if callable(advanced_init.__dict__[name])]
 
-        parser_init = self.parser.add_argument_group('INIT',
-                                                     'Init Options (needs environment extension '
-                                                     '[extend_environment_initialisation.sh])')
+        parser_init = self.parser.add_argument_group('INIT')
 
         parser_init.add_argument('--init',
                                  action='store_true',
@@ -177,7 +175,7 @@ class CLArguments(BaseCLArguments):
 
         parser_init.add_argument("--trim-lda",
                                  type=self.str2bool,
-                                 default="True",
+                                 default="False",
                                  help="Flag for trimming lda samples on last layer")
         parser_init.add_argument('--sn-ratio',
                                  type=int,

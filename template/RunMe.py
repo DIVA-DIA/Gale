@@ -684,7 +684,8 @@ class RunMe:
             if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                            kwargs[action.dest] != action.default) \
+                            kwargs[action.dest] != action.default
+                            and str(kwargs[action.dest]) != action.default) \
                             and action.dest != 'load_model' \
                             and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))

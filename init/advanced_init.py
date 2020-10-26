@@ -2,11 +2,10 @@
 Here are defined the different versions of advanced initialization techniques.
 """
 import datetime
-import time
 import logging
 import math
 import sys
-from itertools import count
+import time
 
 import numpy as np
 import torch
@@ -18,7 +17,6 @@ from init.util import lda, pca
 from template.runner.base.base_routine import BaseRoutine
 from template.runner.base.base_setup import BaseSetup
 from util.TB_writer import TBWriter
-from util.metric_logger import MetricLogger
 
 
 def minibatches_to_matrix(A):
