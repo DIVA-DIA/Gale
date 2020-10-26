@@ -4,3 +4,6 @@ conda create -y -n gale python=3.7.4 colorlog numpy pandas tqdm matplotlib seabo
 source activate gale
 pip install sigopt tensorboardx darwin-py wandb psutil
 
+#spectral stuff
+pip install spectralLayersPyTorch
+conda install scikit-learn -y
