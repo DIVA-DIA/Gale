@@ -19,7 +19,10 @@ for file in glob.glob(path + '/**/*.py', recursive=True):
 
 # Importing all the models which are annotated with @Model
 for module in modules:
-    importlib.import_module(module)
+    try:
+        importlib.import_module(module)
+    except ModuleNotFoundError:
+        continue
 
 # for module in modules:
 #     importlib.import_module(module)

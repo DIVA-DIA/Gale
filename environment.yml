@@ -101,7 +101,6 @@ dependencies:
       - shortuuid==0.5.0
       - sigopt==5.3.1
       - smmap2==2.0.5
-      - spectrallayerspytorch==0.989
       - subprocess32==3.5.4
       - tensorboardx==2.0
       - text-unidecode==1.3

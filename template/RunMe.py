@@ -547,10 +547,18 @@ class RunMe:
             packages_in_runner.remove('base')
             if '__pycache__' in packages_in_runner:
                 packages_in_runner.remove('__pycache__')
-            return {n: c
-                    for pkg in packages_in_runner
-                    for n, c in inspect.getmembers(importlib.import_module('template.runner.' + pkg), inspect.isclass)
-                    if issubclass(c, AbstractRunner) and not inspect.isabstract(c)}
+            runner_classes = {}
+            for pkg in packages_in_runner:
+                # check if we can load the runner if yes add it to the list, else continue
+                try:
+                    runner_tmp = importlib.import_module('template.runner.' + pkg)
+                except ModuleNotFoundError:
+                    continue
+                for n, c in inspect.getmembers(runner_tmp, inspect.isclass):
+                    if issubclass(c, AbstractRunner) and not inspect.isabstract(c):
+                        runner_classes[n] = c
+
+            return runner_classes
 
         # Parse the runner-class to be used
         parser = argparse.ArgumentParser(
