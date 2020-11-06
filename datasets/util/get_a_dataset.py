@@ -19,7 +19,7 @@ from datasets.util.dataset_splitter import split_dataset
 from util.misc import make_folder_if_not_exists
 
 
-def mnist(args):
+def mnist(output_folder, **kwargs):
     """
     Fetches and prepares (in a DeepDIVA friendly format) the MNIST dataset to the location specified
     on the file system
@@ -35,20 +35,20 @@ def mnist(args):
         None
     """
     # Use torchvision to download the dataset
-    torchvision.datasets.MNIST(root=args.output_folder, download=True)
+    torchvision.datasets.MNIST(root=output_folder, download=True)
 
     # Load the data into memory
-    train_data, train_labels = torch.load(os.path.join(args.output_folder,
+    train_data, train_labels = torch.load(os.path.join(output_folder,
                                                        'MNIST',
                                                        'processed',
                                                        'training.pt'))
-    test_data, test_labels = torch.load(os.path.join(args.output_folder,
+    test_data, test_labels = torch.load(os.path.join(output_folder,
                                                      'MNIST',
                                                      'processed',
                                                      'test.pt'))
 
     # Make output folders
-    dataset_root = os.path.join(args.output_folder, 'MNIST')
+    dataset_root = os.path.join(output_folder, 'MNIST')
     train_folder = os.path.join(dataset_root, 'train')
     test_folder = os.path.join(dataset_root, 'test')
 
@@ -66,8 +66,8 @@ def mnist(args):
     _write_data_to_folder(train_data, train_labels, train_folder)
     _write_data_to_folder(test_data, test_labels, test_folder)
 
-    shutil.rmtree(os.path.join(args.output_folder, 'MNIST', 'raw'))
-    shutil.rmtree(os.path.join(args.output_folder, 'MNIST', 'processed'))
+    shutil.rmtree(os.path.join(output_folder, 'MNIST', 'raw'))
+    shutil.rmtree(os.path.join(output_folder, 'MNIST', 'processed'))
 
     split_dataset(dataset_folder=dataset_root, split=0.2, symbolic=False)
 
