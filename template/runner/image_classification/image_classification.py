@@ -1,11 +1,11 @@
 # Gale
+from init.initializer import init_model
 from template.runner.base import BaseRunner
-
-
+from .evaluate import ImageClassificationEvaluate
 # Delegated
 from .setup import ImageClassificationSetup
 from .train import ImageClassificationTrain
-from .evaluate import ImageClassificationEvaluate
+
 
 class ImageClassification(BaseRunner):
 
@@ -18,6 +18,23 @@ class ImageClassification(BaseRunner):
         """
         super().__init__()
         self.setup = ImageClassificationSetup()
+
+    ####################################################################################################################
+    def prepare(self, init=False, **kwargs) -> dict:
+        """See parent method for documentation
+
+        Extra-Parameters
+        ----------
+        init : bool
+            Flag for use advanced init methods
+        """
+        d = super().prepare(**kwargs)
+
+        # Init the model
+        if init:
+            init_model(model=d['model'], data_loader=d['train_loader'], **kwargs)
+
+        return d
 
     ####################################################################################################################
     """

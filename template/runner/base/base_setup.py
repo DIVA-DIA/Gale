@@ -2,12 +2,11 @@
 import inspect
 import logging
 import os
-from collections import OrderedDict
 # Torch related stuff
 import shutil
 from abc import abstractmethod
+from collections import OrderedDict
 from pathlib import Path
-from torch.hub import load_state_dict_from_url
 
 import numpy as np
 import pandas as pd
@@ -16,10 +15,11 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data
+from torch.hub import load_state_dict_from_url
 
 import models
-from models import model_zoo
 from datasets.util.dataset_integrity import verify_dataset_integrity
+from models import model_zoo
 
 
 # DeepDIVA
@@ -39,7 +39,7 @@ class BaseSetup:
     ################################################################################################
     # General setup: model, optimizer, lr scheduler and criterion
     @classmethod
-    def setup_model(cls, model_name, no_cuda, num_classes=None, load_model=None, **kwargs):
+    def setup_model(cls, model_name, no_cuda, num_classes=None, load_model=None, wandb_project=None, **kwargs):
         """Setup the model, load and move to GPU if necessary
 
         Parameters
@@ -52,6 +52,8 @@ class BaseSetup:
             How many different classes there are in our problem. Used for loading the model.
         load_model : string
             Path to a saved model
+        wandb_project : str
+            Token for using the WandDB tool
 
         Returns
         -------
@@ -134,6 +136,11 @@ class BaseSetup:
             logging.info('Transfer model to GPU')
             model = torch.nn.DataParallel(model).cuda()
             cudnn.benchmark = True
+
+        # Magic from WanDB
+        if wandb_project is not None:
+            import wandb
+            wandb.watch(model)
 
         return model
 
@@ -248,7 +255,6 @@ class BaseSetup:
 
     ################################################################################################
     # Analytics handling
-
     @classmethod
     def create_analytics_csv(cls, input_folder, darwin_dataset, train_ds, **kwargs):
         """
@@ -535,7 +541,7 @@ class BaseSetup:
         raise NotImplementedError
 
     @classmethod
-    def _dataloaders_from_datasets(cls, batch_size, train_ds, val_ds, test_ds, workers, **kwargs):
+    def _dataloaders_from_datasets(cls, batch_size, train_ds, val_ds, test_ds, workers, no_pin_memory, **kwargs):
         """
         This function creates (and returns) dataloader from datasets objects
 
@@ -549,6 +555,8 @@ class BaseSetup:
             Train, validation and test splits
         workers:
             Number of workers to use to load the data.
+        no_pin_memory: bool
+            Pin the data to GPU
 
         Returns
         -------
@@ -562,13 +570,16 @@ class BaseSetup:
         train_loader = torch.utils.data.DataLoader(train_ds,
                                                    shuffle=True,
                                                    batch_size=batch_size,
-                                                   num_workers=workers)
+                                                   num_workers=workers,
+                                                   pin_memory=not no_pin_memory)
         val_loader = torch.utils.data.DataLoader(val_ds,
                                                  batch_size=batch_size,
-                                                 num_workers=workers)
+                                                 num_workers=workers,
+                                                 pin_memory=not no_pin_memory)
         test_loader = torch.utils.data.DataLoader(test_ds,
                                                   batch_size=batch_size,
-                                                  num_workers=workers)
+                                                  num_workers=workers,
+                                                  pin_memory=not no_pin_memory)
         return train_loader, val_loader, test_loader
 
     ################################################################################################
@@ -606,8 +617,16 @@ class BaseSetup:
     ################################################################################################
     # Checkpointing handling
     @classmethod
-    def checkpoint(cls, epoch, new_value, best_value, log_dir, the_lower_the_better=None,
-                   checkpoint_all_epochs=False, checkpoint_every=None, **kwargs):
+    def checkpoint(
+            cls,
+            epoch,
+            new_value,
+            best_value,
+            log_dir,
+            the_lower_the_better=None,
+            checkpoint_all_epochs=False,
+            run=None,
+            **kwargs):
         """Saves the current training checkpoint and the best valued checkpoint to file.
 
         Parameters
@@ -626,31 +645,30 @@ class BaseSetup:
             Changes the scale such that smaller values are better than bigger values
             (useful when metric evaluted is error rate)
         checkpoint_all_epochs : bool
-            If enabled, save checkpoint after every epoch.
-        checkpoint_every : int
-            If specified, save checkpoint after every N epochs.
-        kwargs : dict
-            Any additional arguments.
+            If enabled, save checkpoint after every epoch
+        run : int
+            Number of run, used in multi-run context to discriminate the different runs
+
         Returns
         -------
         best_value : float
             Best value ever obtained.
 
         """
+        # 'run' is injected in kwargs at runtime in RunMe.py IFF it is a multi-run event
+        multi_run_label = f"_{run}" if run is not None else ""
+
         is_best = new_value > best_value if not the_lower_the_better else new_value < best_value
         best_value = new_value if is_best else best_value
 
-        filename = os.path.join(log_dir, 'checkpoint.pth')
+        filename = os.path.join(log_dir, f'checkpoint{multi_run_label}.pth')
         torch.save(cls._serialize_dict(epoch=epoch, best_value=best_value, **kwargs), filename)
         if is_best:
-            shutil.copyfile(filename, os.path.join(log_dir, 'best.pth'))
+            shutil.copyfile(filename, os.path.join(log_dir, f'best{multi_run_label}.pth'))
 
         # If enabled, save all checkpoints with epoch number.
         if checkpoint_all_epochs:
-            shutil.move(filename, os.path.join(log_dir, f'checkpoint_{epoch}.pth.tar'))
-        elif checkpoint_every is not None:
-            if (epoch+1) % checkpoint_every == 0:
-                shutil.copyfile(filename, os.path.join(log_dir, f'checkpoint_{epoch}.pth.tar'))
+            shutil.move(filename, os.path.join(log_dir, f'checkpoint_{epoch}{multi_run_label}.pth.tar'))
         return best_value
 
     @classmethod
@@ -775,6 +793,7 @@ class BaseSetup:
         torch.optim.lr_scheduler.LambdaLR
             The scheduler object
         """
+
         def f(x):
             if x >= warmup_iters:
                 return 1

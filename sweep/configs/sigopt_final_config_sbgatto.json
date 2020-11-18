@@ -1,0 +1,76 @@
+[
+    {
+        "name": "weight-decay",
+        "type": "double",
+        "precision": 5,
+        "bounds": {"max": 0.003, "min": 0.0}
+    },
+    {
+        "name": "lr",
+        "type": "double",
+        "precision": 5,
+        "bounds": {"max": 0.03, "min": 0.0003}
+    },
+    {
+        "name": "conv-normalize",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "conv-standardize",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "conv-scale",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "lin-normalize",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "lin-standardize",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "lin-scale",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "retrain-normalize",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "retrain-standardize",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "retrain-scale",
+        "type": "int",
+        "bounds": {"max": 1, "min": 0}
+    },
+    {
+        "name": "retrain-wd",
+        "type": "double",
+        "precision": 5,
+        "bounds": {"max": 0.003, "min": 0.0}
+    },
+    {
+        "name": "retrain-lr",
+        "type": "double",
+        "precision": 5,
+        "bounds": {"max": 0.3, "min": 0.00003}
+    },
+    {
+        "name": "retrain-epochs",
+        "type": "int",
+        "bounds": {"max": 200, "min": 1}
+    }
+]

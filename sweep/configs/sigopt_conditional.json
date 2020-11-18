@@ -1,0 +1,16 @@
+[
+  {
+    "name": "trim-lda",
+    "values": [
+      "on",
+      "off"
+    ]
+  },
+  {
+    "name": "sn-ratio",
+    "values": [
+      "on",
+      "off"
+    ]
+  }
+]

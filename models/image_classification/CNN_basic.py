@@ -3,7 +3,9 @@ CNN with 3 conv layers and a fully connected classification layer
 """
 
 import torch.nn as nn
+
 from models.registry import Model
+
 
 class Flatten(nn.Module):
     """
@@ -12,9 +14,11 @@ class Flatten(nn.Module):
     Replaces the flattening line (view) often found into forward() methods of networks. This makes it
     easier to navigate the network with introspection
     """
+
     def forward(self, x):
         x = x.view(x.size()[0], -1)
         return x
+
 
 @Model
 class CNN_basic(nn.Module):

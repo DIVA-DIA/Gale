@@ -141,6 +141,7 @@ if __name__ == "__main__":
     # If experiment name is not set, ask for one
     if (args.password is None) and (args.email is not None):
         from getpass import getpass
+
         args.password = getpass()
 
     # Run the actual code

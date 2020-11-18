@@ -1,0 +1,20 @@
+[
+  {
+    "name": "weight-decay",
+    "type": "double",
+    "precision": 5,
+    "bounds": {
+      "max": 0.004,
+      "min": 0.0
+    }
+  },
+  {
+    "name": "lr",
+    "type": "double",
+    "precision": 4,
+    "bounds": {
+      "max": 0.1,
+      "min": 0.001
+    }
+  }
+]

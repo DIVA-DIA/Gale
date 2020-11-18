@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+
 from evaluation import accuracy
 
 
@@ -21,7 +22,7 @@ def test_no_batch():
 def test_mini_batch():
     # Small input
     output = torch.FloatTensor([[0.1, 0.0],
-                               [0.1, 0.0]])
+                                [0.1, 0.0]])
     target = torch.LongTensor([0, 0])
     assert accuracy(output, target)[0].cpu().numpy() == 100.0
 
@@ -43,4 +44,4 @@ def test_mini_batch():
                                 [0.1, 0.2, 0.3, 0.4, 1.0, 0.6],
                                 [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]])
     target = torch.LongTensor([1, 1, 1, 1, 1, 1])
-    np.testing.assert_almost_equal(accuracy(output, target)[0].cpu().numpy(), 100/6.0)
+    np.testing.assert_almost_equal(accuracy(output, target)[0].cpu().numpy(), 100 / 6.0)

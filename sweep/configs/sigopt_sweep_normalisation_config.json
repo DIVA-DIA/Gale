@@ -1,0 +1,73 @@
+[
+  {
+    "name": "solver",
+    "type": "categorical",
+    "categorical_values": [
+      {
+        "enum_index": 1,
+        "name": "svd"
+      },
+      {
+        "enum_index": 2,
+        "name": "eigen"
+      }
+    ]
+  },
+  {
+    "name": "weight-decay",
+    "type": "double",
+    "precision": 5,
+    "bounds": {
+      "max": 0.003,
+      "min": 0.0
+    }
+  },
+  {
+    "name": "conv-normalize",
+    "type": "int",
+    "bounds": {
+      "max": 1,
+      "min": 0
+    }
+  },
+  {
+    "name": "conv-standardize",
+    "type": "int",
+    "bounds": {
+      "max": 1,
+      "min": 0
+    }
+  },
+  {
+    "name": "conv-scale",
+    "type": "int",
+    "bounds": {
+      "max": 1,
+      "min": 0
+    }
+  },
+  {
+    "name": "lin-normalize",
+    "type": "int",
+    "bounds": {
+      "max": 1,
+      "min": 0
+    }
+  },
+  {
+    "name": "lin-standardize",
+    "type": "int",
+    "bounds": {
+      "max": 1,
+      "min": 0
+    }
+  },
+  {
+    "name": "lin-scale",
+    "type": "int",
+    "bounds": {
+      "max": 1,
+      "min": 0
+    }
+  }
+]

@@ -22,26 +22,25 @@ import tarfile
 import tempfile
 import time
 import traceback
-from pathlib import Path
+from itertools import count
 
 import colorlog
 import numpy as np
 # Torch related stuff
-import torch.backends.cudnn as cudnn
-import torch.nn.parallel
-import torch.optim
-import torch.utils.data
+import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 # SigOpt
 from sigopt import Connection
 
-# DeepDIVA
+# Gale
 from template.runner.base import AbstractRunner, BaseCLArguments
 from util.TB_writer import TBWriter
 from util.misc import get_all_files_in_folders_and_subfolders
 from util.misc import to_capital_camel_case
-########################################################################################################################
 from visualization.mean_std_plot import plot_mean_std
 
+########################################################################################################################
 
 class RunMe:
     """
@@ -77,18 +76,48 @@ class RunMe:
         """
         # Parse all command line arguments
         args, cls.parser = cls._parse_arguments(args)
+        # Get the dict out of the arguments
+        args = args.__dict__
+
+        # If Wandb is set, initialize it and grab configurations FROM it i.e. in case of sweeps
+        if args['wandb_sweep']:
+            import wandb
+            # Init the tool. This will populate the config in case of sweeps
+            wandb.init(project=args['wandb_project'])
+            # If there are some parameters these have been provided by a sweep
+            if len(wandb.config._items) > 1:
+                # Grab all parameters from the sweep
+                sweep_parameters = wandb.config._items
+                del sweep_parameters['_wandb']
+                for k, v in sweep_parameters.items():
+                    # Update with parameters from the wandb.config s.t. we get the parameters from the sweep
+                    args.update({k:v})
+                    # Append their key:value to the experiment name for clarity in the name on the Website
+                    args['experiment_name'] += "_" + str(k) + ":" + str(v)
+            # Provide all the parameters as configurations to Wandb
+            wandb.config.update(args, allow_val_change=True)
+            wandb.run.name = args['experiment_name']
+            wandb.run.save()
 
         # Select the use case
-        if getattr(args, 'sig_opt', None) is not None:
-            return cls._run_sig_opt(**args.__dict__)
+        if args['sigopt_token'] is not None:
+            return cls._run_sigopt(**args)
         else:
-            if getattr(args, 'inference', None):
-                return cls._inference_execute(**args.__dict__)
+            if args['inference']:
+                return cls._inference_execute(**args)
             else:
-                return cls._execute(**args.__dict__)
+                return cls._execute(**args)
 
     @classmethod
-    def _run_sig_opt(cls, sig_opt, sig_opt_token, sig_opt_runs, sig_opt_project, **kwargs) -> dict:
+    def _run_sigopt(
+            cls,
+            sigopt_token,
+            sigopt_parallel_bandwidth,
+            sigopt_experiment_id,
+            sigopt_best_epoch,
+            multi_run,
+            **kwargs
+    ) -> dict:
         """
         This function creates a new SigOpt experiment and optimizes the selected parameters.
 
@@ -97,58 +126,189 @@ class RunMe:
 
         Parameters
         ----------
-        sig_opt : str
-            Path to a JSON file containing sig_opt variables and sig_opt bounds.
-        sig_opt_token : str
+        sigopt_token : str
             SigOpt API token
-        sig_opt_runs : int
-            Number of updates of SigOpt required
-        sig_opt_project : str
-            SigOpt project name
+        sigopt_parallel_bandwidth : int
+            Number of concurrent parallel optimization running
+        sigopt_experiment_id : int
+            SigOpt experiment ID for resuming
+        sigopt_best_epoch : bool
+            Flag for optimizing the best epoch (how soon the max val accuracy is achieved)
+        multi_run : int
+            If not None, indicates how many multiple runs needs to be done
 
         Returns
         -------
         {} : dict
             At the moment it is not necessary to return meaningful values from here
         """
-        # Load parameters from file
-        with open(sig_opt, 'r') as f:
-            parameters = json.loads(f.read())
-
         # Put your SigOpt token here.
-        if sig_opt_token is None:
-            logging.error('Enter your SigOpt API token using --sig-opt-token')
+        if sigopt_token is None:
+            logging.error('Enter your SigOpt API token using --sigopt-token')
             raise SystemExit
-        else:
-            conn = Connection(client_token=sig_opt_token)
-            experiment = conn.experiments().create(
-                name=kwargs['experiment_name'],
-                parameters=parameters,
-                observation_budget=sig_opt_runs,
-                project=sig_opt_project,
+
+        # If no experiment id provided, then create a new experiment
+        if sigopt_experiment_id is None:
+            sigopt_experiment_id = cls.create_sigopt_experiment(
+                sigopt_token=sigopt_token,
+                sigopt_parallel_bandwidth=sigopt_parallel_bandwidth,
+                minimize_best_epoch=sigopt_best_epoch,
+                **kwargs
             )
+        # Authenticate to SigOpt
+        conn = Connection(client_token=sigopt_token)
 
-            logging.info("Created experiment: https://sigopt.com/experiment/" + experiment.id)
-            for i in range(sig_opt_runs):
-                # Get suggestion from SigOpt
-                suggestion = conn.experiments(experiment.id).suggestions().create()
-                params = suggestion.assignments
+        # Running as many runs as necessary, stopping early is max budget is reached
+        # TODO this is voluntarily disabled to use with run_parallel.py which takes care of this
+        # for _ in count(1):
 
-                # Override/inject CL arguments received from SigOpt
-                for key in params:
-                    if isinstance(kwargs[key], bool):
-                        params[key] = params[key].lower() in ['true']
-                    kwargs[key] = params[key]
+        # Refresh experiment object
+        experiment = conn.experiments(sigopt_experiment_id).fetch()
 
-                # Run
-                _, _, score = cls._execute(**kwargs)
+        # It case the bandwidth is 1, currently open suggestions are dead runs so we remove them
+        # TODO this is voluntarily disabled to use with run_parallel.py which takes care of this
+        # if experiment.parallel_bandwidth == 1:
+        #     conn.experiments(experiment.id).suggestions().delete(state="open")
 
-                # In case of multi-run the return type will be a list (otherwise is a single float)
-                if type(score) == float:
-                    score = [score]
-                for item in score:
-                    conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, value=item)
+        # Check if budget has been met
+        if experiment.progress.observation_count >= experiment.observation_budget:
+            print(
+                f"Observation budged reached {experiment.progress.observation_budget_consumed}/"
+                f"{experiment.observation_budget}. Finished here :)"
+            )
+            return {}
+
+        # Get suggestion from SigOpt
+        suggestion = conn.experiments(experiment.id).suggestions().create()
+        params = suggestion.assignments
+
+        # Override/inject CL arguments received from SigOpt
+        for key in params:
+            if key in kwargs and isinstance(kwargs[key], bool):
+                params[key] = params[key].lower() in ['true']
+            kwargs[key.replace("-", "_")] = params[key]
+
+        # Run
+        return_value = cls._execute(multi_run=multi_run, **kwargs)
+        val = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
+
+        # Get indexes of highest values
+        indexes = np.argmax(val, axis=1)
+        # Select the highest values
+        scores = val[np.arange(val.shape[0]), indexes]
+
+        # Compute the averaged value and std of the runs (if multi_run is None then is a single value)
+        values = [{
+            "name": "validation_accuracy",
+            "value": float(np.mean(scores)),
+            "value_stddev": float(np.std(scores)) if multi_run is not None else None
+        }]
+        # If test-set has errors (i.e. there is -1 in it) then invalidate the validation scores as well s.t SigOpt knows about it
+        test = return_value['val'] if multi_run is not None else np.expand_dims(return_value['val'], axis=0)
+        if np.max(test) <= 0:
+            values[0]['value'] = -1
+            values[0]['value_stddev'] = 0
+
+        # If enabled, get the best epoch value
+        if sigopt_best_epoch:
+            # Correct for epoch -1 being at the end of the array if necessary
+            indexes[indexes == val.shape[1]] = -1
+            values.append({
+                "name": "best_epoch",
+                "value": float(np.round(np.mean(indexes))),
+                "value_stddev": float(np.std(indexes))
+            })
+            TBWriter().add_scalar(tag='test/best_epoch', scalar_value=float(np.round(np.mean(indexes))))
+            TBWriter().add_scalar(tag='test/best_epoch_std', scalar_value=float(np.std(indexes)))
+
+        # Report the observation
+        conn.experiments(experiment.id).observations().create(suggestion=suggestion.id, values=values)
         return {}
+
+    @classmethod
+    def create_sigopt_experiment(
+            cls,
+            experiment_name,
+            sigopt_token,
+            sigopt_file,
+            sigopt_project,
+            sigopt_parallel_bandwidth,
+            sigopt_runs=None,
+            sigopt_conditionals_file=None,
+            minimize_best_epoch=True,
+            **kwargs
+    ):
+        """
+        Create a SigOpt experiments with the selected parameters. The metric to maximize is the validation accuracy and
+        if enabled also the epoch is which this is realised.
+
+        Parameters
+        ----------
+        experiment_name : string
+            Name of the experiment. If not specify, accepted from command line
+        sigopt_token : str
+            SigOpt API token
+        sigopt_file : str
+            Path to a JSON file containing sig_opt variables and sig_opt bounds
+        sigopt_project : str
+            SigOpt project name
+        sigopt_parallel_bandwidth : int
+            Number of concurrent parallel optimization running
+        sigopt_runs : int
+            Number of updates of SigOpt required. If None, then it is set as
+            10 * num of parameters to optimize + 10 buffer + 10 top performing
+        sigopt_conditionals_file : str
+            Path to a JSON file containing sigopt conditionals
+        minimize_best_epoch : bool
+            Flag for minimizing the occurrence of the epoch where the best validation accuracy is achieved
+
+        Returns
+        -------
+        experiment.id : int
+            ID of the experiment created
+        """
+        assert sigopt_token is not None
+        assert sigopt_file is not None
+        assert sigopt_project is not None
+
+        conn = Connection(client_token=sigopt_token)
+        # Load parameters from file
+        with open(sigopt_file, 'r') as f:
+            parameters = json.loads(f.read())
+        # Compute number of runs if not provided
+        if sigopt_runs is None:
+            sigopt_runs = len(parameters) * 10 + 20
+
+        # Create the metrics for the experiments
+        metrics = [{
+            'name' : "validation_accuracy",
+            'objective' : "maximize",
+        }]
+        if minimize_best_epoch:
+            metrics[0]['threshold'] = 0
+            metrics.append({
+                'name' : "best_epoch",
+                'objective' : "minimize",
+            })
+
+        # If specified, load the conditionals
+        conditionals = []
+        if len(metrics) == 1 and sigopt_conditionals_file is not None:
+            with open(sigopt_conditionals_file, 'r') as f:
+                conditionals = json.loads(f.read())
+
+        # Create the actual experiment
+        experiment = conn.experiments().create(
+            name=experiment_name,
+            conditionals=conditionals,
+            parameters=parameters,
+            observation_budget=sigopt_runs,
+            project=sigopt_project,
+            parallel_bandwidth=sigopt_parallel_bandwidth,
+            metrics=metrics
+        )
+        print(f"Created experiment {experiment_name} -> https://sigopt.com/experiment/{experiment.id}")
+        return experiment.id
 
     ####################################################################################################################
     ####################################################################################################################
@@ -200,7 +360,6 @@ class RunMe:
 
         # Set up execution environment. Specify CUDA_VISIBLE_DEVICES and seeds
         cls._set_up_env(**kwargs)
-        # kwargs["device"] = torch.device(kwargs["device"] if torch.cuda.is_available() else "cpu")
         kwargs["device"] = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
         # Find all subclasses of AbstractRunner and BaseRunner and select the chosen one among them based on -rc
@@ -216,25 +375,21 @@ class RunMe:
 
         # Run the actual experiment
         start_time = time.time()
-        try:
-            if multi_run is not None:
-                return_value = cls._multi_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
-            else:
+        if multi_run is not None:
+            return_value = cls._multi_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
+        else:
+            try:
                 return_value = runner_class().single_run(current_log_folder=current_log_folder, **unpacked_args, **kwargs)
-            logging.info(f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}')
-        except Exception as exp:
-            if quiet:
-                print('Unhandled error: {}'.format(repr(exp)))
-            logging.error('Unhandled error: %s' % repr(exp))
-            logging.error(traceback.format_exc())
-            logging.error('Execution finished with errors :(')
-            raise SystemExit
-        finally:
-            # Free logging resources
-            logging.shutdown()
-            logging.getLogger().handlers = []
-            TBWriter().close()
-            print('All done! (Log files at {} )'.format(current_log_folder))
+            except Exception as exp:
+                return_value = cls._log_failure(exp, **kwargs)
+                TBWriter().add_scalar(tag='test/accuracy', scalar_value=return_value['test'])
+            finally:
+                # Free logging resources
+                logging.shutdown()
+                logging.getLogger().handlers = []
+                TBWriter().close()
+        logging.info(f'Time taken: {datetime.timedelta(seconds=time.time() - start_time)}')
+        print('Execution done! (Log files at {} )'.format(current_log_folder))
         return return_value
 
     @classmethod
@@ -310,23 +465,28 @@ class RunMe:
         """
 
         # Instantiate the scores tables which will stores the results.
-        train_scores = np.zeros((multi_run, epochs))
-        val_scores = np.zeros((multi_run, epochs + 1))
-        test_scores = np.zeros(multi_run)
+        train_all = np.zeros((multi_run, epochs))
+        val_all = np.zeros((multi_run, epochs + 1))
+        test_all = np.zeros(multi_run)
 
         # As many times as runs
         for i in range(multi_run):
             logging.info('Multi-Run: {} of {}'.format(i + 1, multi_run))
-            return_value = runner_class().single_run(run=i,
-                                                    current_log_folder=current_log_folder,
-                                                    multi_run=multi_run,
-                                                    epochs=epochs,
-                                                    **kwargs)
-            train_scores[i, :], val_scores[i, :], test_scores[i] = (return_value['train'], return_value['val'], return_value['test'])
+            try:
+                return_value = runner_class().single_run(
+                    run=i,
+                    current_log_folder=current_log_folder,
+                    multi_run=multi_run,
+                    epochs=epochs,
+                    **kwargs
+                )
+            except Exception as exp:
+                return_value = cls._log_failure(exp, epochs)
 
+            train_all[i, :], val_all[i, :], test_all[i] = (return_value['train'], return_value['val'], return_value['test'])
 
-            # Generate and add to tensorboard the shaded plot for train
-            train_curve = plot_mean_std(arr=train_scores[:i + 1],
+            # Generate and add to TB the shaded plot for train
+            train_curve = plot_mean_std(arr=train_all[:i + 1],
                                         suptitle='Multi-Run: Train',
                                         title='Runs: {}'.format(i + 1),
                                         xlabel='Epoch', ylabel='Score',
@@ -334,9 +494,9 @@ class RunMe:
             TBWriter().save_image(tag='train_curve', image=train_curve, global_step=i)
             logging.info('Generated mean-variance plot for train')
 
-            # Generate and add to tensorboard the shaded plot for va
+            # Generate and add to TB the shaded plot for va
             val_curve = plot_mean_std(x=(np.arange(epochs + 1) - 1),
-                                      arr=np.roll(val_scores[:i + 1], axis=1, shift=1),
+                                      arr=np.roll(val_all[:i + 1], axis=1, shift=1),
                                       suptitle='Multi-Run: Val',
                                       title='Runs: {}'.format(i + 1),
                                       xlabel='Epoch', ylabel='Score',
@@ -345,14 +505,22 @@ class RunMe:
             logging.info('Generated mean-variance plot for val')
 
         # Log results on disk
-        np.save(os.path.join(current_log_folder, 'train_values.npy'), train_scores)
-        np.save(os.path.join(current_log_folder, 'val_values.npy'), val_scores)
-        logging.info('Multi-run values for test-mean:{} test-std: {}'.format(np.mean(test_scores), np.std(test_scores)))
-        s = f'mean: {np.mean(test_scores)}\n\nstd: {np.std(test_scores)}'
-        TBWriter().add_text(tag='Performance average and std over {} runs\n'.format(multi_run),
-                            text_string=s)
+        np.save(os.path.join(current_log_folder, 'train_values.npy'), train_all)
+        np.save(os.path.join(current_log_folder, 'val_values.npy'), val_all)
+        logging.info('Multi-run values for test-mean:{} test-std: {}'.format(np.mean(test_all), np.std(test_all)))
+        # Log results on TB
+        TBWriter().add_scalar(tag='test/accuracy', scalar_value=np.mean(test_all))
+        TBWriter().add_scalar(tag='test/accuracy_std', scalar_value=np.std(test_all))
 
-        return train_scores, val_scores, test_scores
+        return {'train': train_all, 'val': val_all, 'test': test_all}
+
+    @classmethod
+    def _log_failure(cls, exp, epochs, **kwargs):
+        logging.error('Unhandled error: %s' % repr(exp))
+        logging.error(traceback.format_exc())
+        logging.error('Execution finished with errors :(')
+        # Experimental return value to be resilient in case of error while being in a SigOpt optimization
+        return {'train': np.ones(epochs) * -2, 'val': np.ones(epochs + 1) * -2, 'test': -2}
 
     ####################################################################################################################
     @classmethod
@@ -379,10 +547,18 @@ class RunMe:
             packages_in_runner.remove('base')
             if '__pycache__' in packages_in_runner:
                 packages_in_runner.remove('__pycache__')
-            return {n: c
-                    for pkg in packages_in_runner
-                    for n, c in inspect.getmembers(importlib.import_module('template.runner.' + pkg), inspect.isclass)
-                    if issubclass(c, AbstractRunner) and not inspect.isabstract(c)}
+            runner_classes = {}
+            for pkg in packages_in_runner:
+                # check if we can load the runner if yes add it to the list, else continue
+                try:
+                    runner_tmp = importlib.import_module('template.runner.' + pkg)
+                except ModuleNotFoundError:
+                    continue
+                for n, c in inspect.getmembers(runner_tmp, inspect.isclass):
+                    if issubclass(c, AbstractRunner) and not inspect.isabstract(c):
+                        runner_classes[n] = c
+
+            return runner_classes
 
         # Parse the runner-class to be used
         parser = argparse.ArgumentParser(
@@ -449,7 +625,18 @@ class RunMe:
                 raise SystemExit
 
     @classmethod
-    def _set_up_logging(cls, parser, experiment_name, output_folder, quiet, args_dict, debug, **kwargs):
+    def _set_up_logging(
+            cls,
+            parser,
+            experiment_name,
+            output_folder,
+            quiet,
+            args_dict,
+            debug,
+            wandb_project,
+            wandb_sweep,
+            **kwargs
+    ):
         """
         Set up a logger for the experiment
 
@@ -467,12 +654,19 @@ class RunMe:
             Specify the logging level
         args_dict : dict
             Contains the entire argument dictionary specified via command line.
+        debug : bool
+            Flag for debugging level
+        wandb_project : str
+            Token for using the WandDB tool
+        wandb_sweep : bool
+            Flag for using wandb sweeps
 
         Returns
         -------
         log_folder : String
             The final logging folder tree
         """
+
         LOG_FILE = 'logs.txt'
 
         # Recover dataset name
@@ -495,10 +689,11 @@ class RunMe:
         # Fetch all non-default parameters
         non_default_parameters = []
         for group in parser._action_groups[2:]:
-            if group.title not in ['GENERAL', 'DATA']:
+            if group.title not in ['GENERAL', 'DATA', 'WANDB']:
                 for action in group._group_actions:
                     if (kwargs[action.dest] is not None) and (
-                            kwargs[action.dest] != action.default) \
+                            kwargs[action.dest] != action.default
+                            and str(kwargs[action.dest]) != action.default) \
                             and action.dest != 'load_model' \
                             and action.dest != 'input_image':
                         non_default_parameters.append(str(action.dest) + "=" + str(kwargs[action.dest]))
@@ -548,19 +743,16 @@ class RunMe:
             f.write(json.dumps(args_dict))
 
         # Save all environment packages to logs_folder
-        if 'CONDA_DEFAULT_ENV' in os.environ:
-            environment_yml = os.path.join(log_folder, 'environment.yml')\
-                .replace('[', '\[')\
-                .replace(']', '\]')\
-                .replace("'", "\\'")
-            current_environment = os.environ['CONDA_DEFAULT_ENV']
-            subprocess.call(f'conda env export -n {current_environment} -f {environment_yml} --no-builds', shell=True)
-        else:
-            logging.info('Could not export environment file (probably you run it with an IDE).')
+        environment_yml = os.path.join(log_folder, 'environment.yml')
+        subprocess.call('conda env export > {}'.format(environment_yml), shell=True)
+
+        if wandb_project is not None and not wandb_sweep:
+            import wandb
+            wandb.init(project=wandb_project, name=experiment_name, config=args_dict, reinit=True)
 
         # Define Tensorboard SummaryWriter
         logging.info('Initialize Tensorboard SummaryWriter')
-        TBWriter().init(log_dir=log_folder)
+        TBWriter().init(log_dir=log_folder, wandb_project=wandb_project)
 
         # Add all parameters to Tensorboard
         TBWriter().add_text(tag='Args', text_string=json.dumps(args_dict))
@@ -582,15 +774,15 @@ class RunMe:
             None
         """
         # All file extensions to be saved by copy-code.
-        FILE_TYPES = ['.sh', '.py', '.yml', '.json', '.md', '.ipynb']
+        FILE_TYPES = ['.sh', '.py']
 
-        # Get Gale root
+        # Get DeepDIVA root
         cwd = os.getcwd()
-        dd_root = os.path.join(cwd.split('gale')[0], 'gale')
+        gale_root = os.path.join(cwd.split('gale')[0], 'gale')
 
-        files = get_all_files_in_folders_and_subfolders(dd_root)
+        files = get_all_files_in_folders_and_subfolders(gale_root)
 
-        # Get all files types in DeepDIVA as specified in FILE_TYPES
+        # Get all files types in Gale as specified in FILE_TYPES
         code_files = [item for item in files if item.endswith(tuple(FILE_TYPES))]
 
         tmp_dir = tempfile.mkdtemp()
@@ -602,8 +794,8 @@ class RunMe:
             shutil.copy(item, dest)
 
         # TODO: make it save a zipfile instead of a tarfile.
-        with tarfile.open(os.path.join(output_folder, 'gale.tar.gz'), 'w:gz') as tar:
-            tar.add(tmp_dir, arcname='gale')
+        with tarfile.open(os.path.join(output_folder, 'Gale.tar.gz'), 'w:gz') as tar:
+            tar.add(tmp_dir, arcname='Gale')
 
         # Clean up all temporary files
         shutil.rmtree(tmp_dir)
@@ -628,10 +820,7 @@ class RunMe:
         -------
             None
         """
-
         # Set visible GPUs
-        # TODO this does not work since it has to be called before importing
-        # torch
         if gpu_id is not None:
             os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(id) for id in gpu_id])
 

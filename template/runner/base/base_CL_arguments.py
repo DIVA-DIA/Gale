@@ -25,6 +25,7 @@ class BaseCLArguments:
         self._criterion_options()
         self._system_options()
         self._inference_parameters()
+        self._wandb_options()
 
     def parse_arguments(self, args=None):
         """ Parse the command line arguments provided
@@ -101,22 +102,32 @@ class BaseCLArguments:
         """ SigOpt options"""
 
         parser_sigopt = self.parser.add_argument_group('GENERAL', 'General Options')
-        parser_sigopt.add_argument('--sig-opt',
+        parser_sigopt.add_argument('--sigopt-token',
                                    type=str,
-                                   default=None,
-                                   help='path to a JSON file containing sig_opt variables and sig_opt bounds.')
-        parser_sigopt.add_argument('--sig-opt-token',
-                                   type=str,
-                                   default=None,
                                    help='place your SigOpt API token here.')
-        parser_sigopt.add_argument('--sig-opt-runs',
-                                   type=int,
-                                   default=100,
-                                   help='number of updates of SigOpt required')
-        parser_sigopt.add_argument('--sig-opt-project',
+        parser_sigopt.add_argument('--sigopt-file',
                                    type=str,
-                                   default=None,
-                                   help='place your SigOpt project name ere.')
+                                   help='path to a JSON file containing sig_opt variables and sig_opt bounds.')
+        parser_sigopt.add_argument('--sigopt-runs',
+                                   type=int,
+                                   help='number of updates of SigOpt required')
+        parser_sigopt.add_argument('--sigopt-project',
+                                   type=str,
+                                   help='place your SigOpt project name here.')
+        parser_sigopt.add_argument('--sigopt-experiment-id',
+                                   type=int,
+                                   help='place your SigOpt experiment id here to resume.')
+        parser_sigopt.add_argument('--sigopt-parallel-bandwidth',
+                                   type=int,
+                                   default=1,
+                                   help='number of concurrent parallel optimization running.')
+        parser_sigopt.add_argument('--sigopt-best-epoch',
+                                   default=False,
+                                   action='store_true',
+                                   help='flag for optimizing the best epoch (how soon the max val accuracy is achieved)')
+        parser_sigopt.add_argument('--sigopt-conditionals-file',
+                                   type=str,
+                                   help='path to a JSON file containing sigopt conditionals')
 
     def _darwin_options(self):
         """ SigOpt options"""
@@ -153,6 +164,10 @@ class BaseCLArguments:
                                    action='store_true',
                                    default=False,
                                    help='run on CPU')
+        parser_system.add_argument('--no-pin-memory',
+                                   action='store_true',
+                                   default=False,
+                                   help='disable the pin memory on GPU')
         parser_system.add_argument('--device',
                                    default='cuda',
                                    help='selects device')
@@ -204,7 +219,7 @@ class BaseCLArguments:
         parser_train.add_argument('-b', '--batch-size',
                                   dest='batch_size',
                                   type=int,
-                                  default=64,
+                                  default=128,
                                   help='input batch size for training')
         parser_train.add_argument('--epochs',
                                   type=int,
@@ -245,13 +260,18 @@ class BaseCLArguments:
         """ Options specific for optimizers """
         # List of possible optimizers already implemented in PyTorch
         optimizer_options = [name for name in torch.optim.__dict__ if callable(torch.optim.__dict__[name])]
-        lrscheduler_options = [name for name in torch.optim.lr_scheduler.__dict__ if callable(torch.optim.lr_scheduler.__dict__[name])]
+        lrscheduler_options = [name for name in torch.optim.lr_scheduler.__dict__ if
+                               callable(torch.optim.lr_scheduler.__dict__[name])]
         parser_optimizer = self.parser.add_argument_group('OPTIMIZER', 'Optimizer Options')
 
         parser_optimizer.add_argument('--optimizer-name',
                                       choices=optimizer_options,
                                       default='SGD',
                                       help='optimizer to be used for training')
+        parser_optimizer.add_argument('--nesterov',
+                                      action='store_true',
+                                      default=False,
+                                      help='enable Nesterov momentum')
         parser_optimizer.add_argument('--momentum',
                                       type=float,
                                       default=0.9,
@@ -271,7 +291,7 @@ class BaseCLArguments:
                                       help='learning rate to be used for training')
         parser_optimizer.add_argument('--epoch-lrscheduler-name',
                                       choices=lrscheduler_options,
-                                      default=[],
+                                      default=['ReduceLROnPlateau'],
                                       nargs='+',
                                       help='learning rate schedulers to be called after every epoch')
         parser_optimizer.add_argument('--batch-lrscheduler-name',
@@ -295,6 +315,10 @@ class BaseCLArguments:
                                       type=float,
                                       default=0.1,
                                       help='decrease lr by a factor of lr-gamma')
+        parser_optimizer.add_argument('--mode',
+                                      type=str,
+                                      default='max',
+                                      help='parameter for torch.optim.lr_scheduler.ReduceLROnPlateau scheduler')
 
     def _criterion_options(self):
         """ Options specific for optimizers """
@@ -315,3 +339,16 @@ class BaseCLArguments:
                                       action='store_true',
                                       help='flag for calling the fast (and lightweight) methods of calling execute')
 
+    def _wandb_options(self):
+        """ WandB options"""
+
+        parser_wandb = self.parser.add_argument_group('WANDB', 'WandB Options')
+        parser_wandb.add_argument('--wandb-project',
+                                  type=str,
+                                  default=None,
+                                  required=False,
+                                  help='name of your wandb project')
+        parser_wandb.add_argument('--wandb-sweep',
+                                  default=False,
+                                  action='store_true',
+                                  help='Use this to enable wandb sweeps')

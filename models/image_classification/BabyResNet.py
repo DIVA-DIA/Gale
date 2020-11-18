@@ -1,6 +1,9 @@
 import math
+
 import torch.nn as nn
+
 from models.registry import Model
+
 
 class Flatten(nn.Module):
     """
@@ -18,7 +21,7 @@ class Flatten(nn.Module):
 class BabyResNet(nn.Module):
     r"""
     ResNet model architecture adapted from `<https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py>`
-    It is better suited for smaller images as the expected input size is TODO
+    It is better suited for smaller images as the expected input size is 32x32
 
     Attributes
     ----------
@@ -89,7 +92,7 @@ class BabyResNet(nn.Module):
         self.features = None
         self.num_input_filters = 128  # Attention: this gets updated after each convx layer creation!
 
-        # First convolutional layer, bring the input into the 56x56x64 desired size
+        # First convolutional layer, bring the input into the 28x28x128 desired size
         self.conv1 = nn.Sequential(
             nn.Conv2d(3, self.num_input_filters, kernel_size=3, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(self.num_input_filters),
@@ -97,17 +100,17 @@ class BabyResNet(nn.Module):
             nn.MaxPool2d(kernel_size=3, stride=1, padding=0),
         )
 
-        # Bulk part of the ResNet with four groups of blocks (expected size: 56x56x64)
+        # Bulk part of the ResNet with four groups of blocks (expected size: 28x28x128)
         self.conv3x = self._make_layer(block_type, 128, num_block[1])
         self.conv4x = self._make_layer(block_type, 256, num_block[2], stride=2)
         self.conv5x = self._make_layer(block_type, 512, num_block[3], stride=2)
 
         # Final averaging and fully connected layer for classification (expected size: 7x7x512*block_type.expansion)
-        self.avgpool = nn.AvgPool2d(kernel_size=7, stride=1)
-        self.fc = nn.Sequential(
+        self.avgpool = nn.Sequential(
+            nn.AvgPool2d(kernel_size=7, stride=1),
             Flatten(),
-            nn.Linear(512 * block_type.expansion, num_classes),
         )
+        self.fc = nn.Linear(512 * block_type.expansion, num_classes)
 
         # Initialize the weights of all layers
         for m in self.modules():
@@ -179,7 +182,7 @@ class BabyResNet(nn.Module):
         x = self.conv5x(x)
 
         x = self.avgpool(x)
-        self.features = x
+        # self.features = x # Currently disabled because avgpool flattens them for working with --init
         x = self.fc(x)
         return x
 
@@ -303,6 +306,8 @@ def babyresnet18(**kwargs):
         The model of the network
     """
     return BabyResNet(_BasicBlock, [0, 4, 2, 2], **kwargs)
+
+
 babyresnet18.expected_input_size = BabyResNet.expected_input_size
 
 
@@ -317,6 +322,8 @@ def babyresnet34(**kwargs):
         The model of the network
     """
     return BabyResNet(_BasicBlock, [0, 7, 6, 3], **kwargs)
+
+
 babyresnet34.expected_input_size = BabyResNet.expected_input_size
 
 
@@ -331,7 +338,10 @@ def babyresnet50(**kwargs):
         The model of the network
     """
     return BabyResNet(_Bottleneck, [0, 7, 6, 3], **kwargs)
+
+
 babyresnet50.expected_input_size = BabyResNet.expected_input_size
+
 
 @Model
 def babyresnet101(**kwargs):
@@ -344,6 +354,8 @@ def babyresnet101(**kwargs):
         The model of the network
     """
     return BabyResNet(_Bottleneck, [0, 7, 23, 3], **kwargs)
+
+
 babyresnet101.expected_input_size = BabyResNet.expected_input_size
 
 
@@ -358,4 +370,6 @@ def babyresnet152(**kwargs):
         The model of the network
     """
     return BabyResNet(_Bottleneck, [0, 11, 36, 3], **kwargs)
+
+
 babyresnet152.expected_input_size = BabyResNet.expected_input_size

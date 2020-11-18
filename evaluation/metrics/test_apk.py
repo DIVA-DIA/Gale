@@ -21,6 +21,7 @@ def test_sanity_check():
     with pytest.raises(AssertionError):
         apk(1, [])
 
+
 def test_apk_base_case():
     # Test base base case scenario
     assert apk(1, [0, 0]) == 0.0

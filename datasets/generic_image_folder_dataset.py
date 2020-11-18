@@ -5,15 +5,15 @@ Load a dataset of images by specifying the folder where its located.
 # Utils
 import os
 from multiprocessing import Pool
-import numpy as np
 
+import numpy as np
 # Torch related stuff
 import torch.utils.data as data
 import torchvision
 from torchvision.datasets.folder import pil_loader, ImageFolder
 
 
-def ImageFolderDataset(path, inmem, workers, **kwargs):
+def ImageFolderDataset(path, inmem, **kwargs):
     """Return the choosen dataset depending on the inmeme parameter
 
     Parameters
@@ -23,15 +23,13 @@ def ImageFolderDataset(path, inmem, workers, **kwargs):
     inmem : boolean
         Load the whole dataset in memory. If False, only file names are stored and images are loaded
         on demand. This is slower than storing everything in memory.
-    workers: int
-        Number of workers to use for the dataloaders
 
     Returns
     -------
     torch.utils.data.Dataset
         Split at the chosen path
     """
-    return ImageFolderInMemory(path, workers) if inmem else ImageFolderTorchVision(path)
+    return ImageFolderInMemory(path, **kwargs) if inmem else ImageFolderTorchVision(path)
 
 
 class ImageFolderTorchVision(ImageFolder):
@@ -60,7 +58,7 @@ class ImageFolderInMemory(data.Dataset):
     the user ensuring that the dataset actually fits in memory.
     """
 
-    def __init__(self, path, transform=None, target_transform=None, workers=1):
+    def __init__(self, path, transform=None, target_transform=None, workers=1, **kwargs):
         """
         Load the data in memory and prepares it as a dataset.
 
@@ -90,7 +88,7 @@ class ImageFolderInMemory(data.Dataset):
         self.labels = np.asarray([item[1] for item in dataset.imgs])
 
         # Load all samples
-        pool = Pool(workers)
+        pool = Pool(workers + 1)
         self.data = pool.map(pil_loader, file_names)
         pool.close()
 
@@ -119,6 +117,3 @@ class ImageFolderInMemory(data.Dataset):
 
     def __len__(self):
         return len(self.data)
-
-
-

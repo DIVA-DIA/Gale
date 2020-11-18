@@ -2,11 +2,11 @@
 Load a dataset of images by specifying the folder where its located.
 """
 
+import logging
 # Utils
 import os
 from collections import Counter
 
-import logging
 import numpy as np
 import pandas as pd
 # Torch related stuff
@@ -59,7 +59,7 @@ class MultiCategoricalDataset(data.Dataset):
         self.update_dataset_statistics(categories, df, path)
 
         # Store the actual values
-        self.values = df.values[: ,1:]
+        self.values = df.values[:, 1:]
 
     @classmethod
     def update_dataset_statistics(cls, categories, df, path):
@@ -99,7 +99,7 @@ class MultiCategoricalDataset(data.Dataset):
                     logging.error(f"There are extra classes ({c} > {diff}) found in {path}")
                     cls.classes[c].extend(diff)
                     cls.classes[c].sort()
-                    cls.frequencies[c].update({d:float('NaN') for d in diff})
+                    cls.frequencies[c].update({d: float('NaN') for d in diff})
 
         # Compute the number of classes on the update classes dict
         cls.num_classes = {k: len(v) for k, v in cls.classes.items()}
@@ -157,11 +157,11 @@ class MultiCategoricalDataset(data.Dataset):
             Dict with all the labels
         """
         # Fetch images
-        img =  pil_loader(self.filenames[index])
+        img = pil_loader(self.filenames[index])
 
         # Fetch the target values and store them into a dict{category:index}
         target = self.values[index, :]
-        target = {c:self._name_to_idx(c, t) for c, t in zip(self.categories, target)}
+        target = {c: self._name_to_idx(c, t) for c, t in zip(self.categories, target)}
 
         if self.transform is not None:
             img = self.transform(img)
@@ -171,5 +171,3 @@ class MultiCategoricalDataset(data.Dataset):
 
     def __len__(self):
         return len(self.filenames)
-
-

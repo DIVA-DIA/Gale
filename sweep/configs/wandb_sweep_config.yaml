@@ -1,0 +1,38 @@
+program: template/RunMe.py
+project: really
+command:
+  - python
+  - ${program}
+  - "-rc"
+  - "ImageClassification"
+  - "--ignoregit"
+  - "--disable-dataset-integrity"
+  - "--output-folder"
+  - "/HOME/albertim/log"
+  - "--input-folder"
+  - "/HOME/albertim/dataset/CIFAR10"
+  - "--wandb-project"
+  - "sweep_samples_sensitivity"
+  - "--model-name"
+  - "LDA_Simple"
+  - "--epochs"
+  - "100"
+  - "--seed"
+  - "42"
+  - "-j"
+  - "16"
+  - "--nesterov"
+  - "--init"
+  - "--init-function"
+  - "pure_lda"
+  - "--experiment-name"
+  - "sweep"
+method: grid
+metric:
+  name: test/accuracy
+  goal: maximize
+parameters:
+  num_samples:
+    values: [10, 4000, 8000, 12000, 16000, 20000, 24000, 28000, 32000, 36000, 40000]
+  max_patches:
+    values: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]

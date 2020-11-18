@@ -1,11 +1,12 @@
 # Utils
 import time
 from abc import abstractmethod
+
 from tqdm import tqdm
 
+from util.TB_writer import TBWriter
 # DeepDIVA
 from util.metric_logger import MetricLogger, ScalarValue
-from util.TB_writer import TBWriter
 
 
 class BaseRoutine:
@@ -15,8 +16,6 @@ class BaseRoutine:
             **kwargs):
         """
         Training routine
-
-        multi_run_label is set here to either the number of the run or empty if just a single run
 
         Parameters
         ----------
@@ -55,15 +54,15 @@ class BaseRoutine:
         # Iterate over whole training set
         end = time.time()
         pbar = tqdm(enumerate(data_loader), total=len(data_loader), unit='batch', ncols=130, leave=False)
-        for batch_idx, (input, target) in pbar:
+        for batch_idx, (input_batch, target) in pbar:
 
             # Measure data loading time
             data_time = time.time() - end
 
             # Moving data to GPU
-            input, target = cls.move_to_device(input=input, target=target, **kwargs)
+            input_batch, target = cls.move_to_device(input_batch=input_batch, target=target, **kwargs)
 
-            cls.run_one_mini_batch(input=input,
+            cls.run_one_mini_batch(input_batch=input_batch,
                                    target=target,
                                    multi_run_label=multi_run_label,
                                    **kwargs)
@@ -86,12 +85,13 @@ class BaseRoutine:
 
             # Log to console
             if batch_idx % log_interval == 0 and len(MetricLogger()) > 0:
-                if cls.main_metric() + multi_run_label in MetricLogger():
-                    mlogger = MetricLogger()[cls.main_metric()]
-                elif "loss" + multi_run_label in MetricLogger():
-                    mlogger = MetricLogger()["loss"]
-                else:
-                    raise AttributeError
+                if batch_idx % log_interval == 0 and len(MetricLogger()) > 0:
+                    if cls.main_metric() + multi_run_label in MetricLogger():
+                        mlogger = MetricLogger()[cls.main_metric()]
+                    elif "loss" + multi_run_label in MetricLogger():
+                        mlogger = MetricLogger()["loss"]
+                    else:
+                        raise AttributeError
                 pbar.set_description(f'{logging_label} epoch [{epoch}][{batch_idx}/{len(data_loader)}]')
                 pbar.set_postfix(Metric=f'{mlogger.global_avg:.3f}',
                                  Time=f'{batch_time:.3f}',
@@ -109,43 +109,45 @@ class BaseRoutine:
             if isinstance(meter, ScalarValue):
                 TBWriter().add_scalar(tag=logging_label + '/' + tag, scalar_value=meter.global_avg, global_step=epoch)
 
-        if cls.main_metric() in MetricLogger():
+        if cls.main_metric() + multi_run_label in MetricLogger():
             return MetricLogger()[cls.main_metric()].global_avg
         else:
             return 0
 
     @classmethod
-    def move_to_device(cls, input=None, target=None, no_cuda=False, **kwargs):
+    def move_to_device(cls, input_batch=None, target=None, no_cuda=False, **kwargs):
         """Move the input and the target on the device that shall be used e.g. GPU
 
         Parameters
         ----------
-        input : torch.autograd.Variable
+        input_batch : torch.autograd.Variable
         target : torch.autograd.Variable
            The input and target data for the mini-batch
         no_cuda : boolean
             Specifies whether the GPU should be used or not. A value of 'True' means the CPU will be used.
+
         Returns
         -------
         input : torch.autograd.Variable
         target : torch.autograd.Variable
            The input and target data for the mini-batch loaded on the GPU
         """
-        def move_to_cuda(elem):
+
+        def move_to(elem):
             if elem is not None:
                 if isinstance(elem, dict):
                     for k, v in elem.items():
-                        elem[k] = move_to_cuda(v)
+                        elem[k] = move_to(v)
                 elif isinstance(elem, (list, tuple)):
-                    elem = [move_to_cuda(e) for e in elem]
+                    elem = [move_to(e) for e in elem]
                 else:
-                    elem = elem.cuda(non_blocking=True)
+                    if no_cuda:
+                        elem = elem.detach().cpu()
+                    else:
+                        elem = elem.cuda(non_blocking=True)
             return elem
 
-        if not no_cuda:
-            input = move_to_cuda(input)
-            target = move_to_cuda(target)
-        return input, target
+        return move_to(input_batch), move_to(target)
 
     @classmethod
     def start_of_the_epoch(cls, **kwargs):
@@ -158,7 +160,7 @@ class BaseRoutine:
 
     @classmethod
     @abstractmethod
-    def run_one_mini_batch(cls, model, criterion, input, target, multi_run_label, **kwargs):
+    def run_one_mini_batch(cls, model, criterion, input_batch, target, multi_run_label, **kwargs):
         """Train the model passed as parameter for one mini-batch
 
         Parameters
@@ -167,7 +169,7 @@ class BaseRoutine:
             The network model being used.
         criterion : torch.nn.loss
             The loss function used to compute the loss of the model.
-        input : torch.autograd.Variable
+        input_batch : torch.autograd.Variable
             The input data for the mini-batch
         target : torch.autograd.Variable
             The target data (labels) for the mini-batch

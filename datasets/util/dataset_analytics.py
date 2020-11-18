@@ -67,7 +67,7 @@ def _cms_online(file_names, workers):
     logging.info('Begin computing the mean')
 
     # Set up a pool of workers
-    pool = Pool(workers+1)
+    pool = Pool(workers + 1)
 
     # Online mean
     results = pool.map(_return_mean, file_names)
